@@ -70,6 +70,9 @@ $RECYCLE.BIN/
 *.sln
 *.code-workspace
 /benchmark/results/
+docs/build
+docs/.docusaurus
+
 # Temp
 /conf
 /examples

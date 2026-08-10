@@ -4,7 +4,7 @@ title: 快速开始
 ---
 # 安装
 
-[下载](download.mdx)对应平台的二进制压缩包解压。若使用 Docker，见 [Docker 安装](./docker.mdx)。
+[下载](download.mdx)对应平台的二进制压缩包解压
 
 ## 服务端
 
@@ -39,8 +39,3 @@ remotePort = 6050
 ```shell
 ./orbien -c orbien.toml
 ```
-
-## Docker
-
-服务端 / 客户端镜像的独立部署写法见 **[Docker 安装](./docker.mdx)**。
-
