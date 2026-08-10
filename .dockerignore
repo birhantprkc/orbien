@@ -1,0 +1,16 @@
+.git
+.github
+.idea
+.bak
+bak
+dist
+target
+**/target
+**/node_modules
+**/dist
+desktop
+examples
+.DS_Store
+**/.DS_Store
+server/assets
+docs/node_modules

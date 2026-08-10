@@ -2,7 +2,7 @@
   <img src="docs/static/img/logo.png" alt="Logo" width="180" height="180" style="border-radius:24px;margin-bottom:20px;"/>
 </div>
 <p align="center" style="font-size:18px;color:#555;margin-top:-10px;margin-bottom:24px;">
-  Intranet penetration built with Rust and Tokio
+  基于 Rust 和 Tokio 的内网穿透
 </p>
 <div align="center">
   <a href="https://github.com/orbien-org/orbien/stargazers">
@@ -35,24 +35,24 @@
   <a href="https://github.com/orbien-org/orbien"><strong>GitHub</strong></a>
 </div>
 
-![dashboard.png](doc/img/dashboard.png)
+![dashboard_zh.png](doc/img/dashboard_zh.png)
 
-A lightweight, high-performance, and secure intranet penetration tool with a binary size under `5MB`.
+一个轻量、高性能、安全的内网穿透工具，二进制体积不到 `5MB`
 
-## Features
+## 功能特性
 
-- **High performance**: end-to-end zero-copy forwarding, low latency, high throughput, no GC pauses, and low memory usage
-- **Proxy protocols**: TCP, UDP, HTTP, HTTPS, and more
-- **Transport protocols**: TCP, KCP, WebSocket, QUIC, with TCP multiplexing support
-- **Security**: Token-based tunnel authentication, TLS and mTLS encryption; HTTPS supports transparent forwarding and client-side TLS termination
-- **Cross-platform**: Windows, Linux, macOS, FreeBSD, and more
-- **Operations**: lightweight Web admin UI and cross-platform desktop client for easy configuration and monitoring
+- **高性能**：全链路零拷贝转发，低延迟、高吞吐、无GC停顿、内存占用低
+- **代理协议**：支持 TCP、UDP、HTTP、HTTPS等多种协议代理
+- **传输协议**：支持 TCP、KCP、WebSocket、QUIC，支持TCP多路复用
+- **安全加密**：支持 Token 隧道鉴权以及Tls和mTLS加密传输；HTTPS采用透明转发和客户端TLS终止
+- **多平台支持**：支持 Windows、Linux、macOS、freeBSD 等多平台
+- **运维管理**：提供轻量Web管理界面和跨平台桌面客户端，便于配置和监控
 
-## Quick Start
+## 快速开始
 
-[Download](download.mdx) the binary archive for your platform and extract it.
+[下载](download.mdx)对应平台的二进制压缩包解压
 
-### Server
+### 服务端
 
 ```toml
 # orbien-server.toml
@@ -64,7 +64,7 @@ bindPort = 9527
 ./orbien-server -c orbien-server.toml
 ```
 
-### Client
+### 客户端
 
 ```toml
 # orbien.toml
@@ -83,16 +83,18 @@ remotePort = 6050
 ./orbien -c orbien.toml
 ```
 
-If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) desktop client — built with `Tauri`, under `10MB`.
+如果觉得命令行CLI操作麻烦，可以使用 [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) 桌面端，该桌面端基于
+`Tauri`框架开发，体积不到`10MB`
 
-![desktop_en.gif](doc/img/desktop_en.gif)
+![desktop.gif](doc/img/desktop.gif)
 
-# Benchmark
+# 性能测试
 
-The chart below shows results from local loopback tests. Orbien keeps memory usage very low and stable.
+下图是基于本地回环进行的测试结果，可以发现`Orbien`的内存占用非常低且稳定。
 
 ![mem.png](doc/img/mem.png)
 
-# Acknowledgements
+# 致谢
 
-This project draws architectural inspiration from [frp](https://github.com/fatedier/frp). The desktop client's UI layout is inspired by [frpc-desktop](https://github.com/luckjiawei/frpc-desktop). Thanks to the open-source community.
+本项目参考了[frp](https://github.com/fatedier/frp)
+的架构思路，桌面客户端UI布局借鉴[frpc-desktop](https://github.com/luckjiawei/frpc-desktop)的交互，感谢开源社区的贡献。

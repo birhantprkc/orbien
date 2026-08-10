@@ -1,0 +1,26 @@
+[package]
+name = "orbien-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "orbien client — TCP proxy over TCP/QUIC"
+
+[[bin]]
+name = "orbien"
+path = "src/main.rs"
+
+[dependencies]
+orbien-core = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+httparse = { workspace = true }
+hostname = { workspace = true }

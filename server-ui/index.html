@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="any" />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+    <title>Orbien</title>
+    <script>
+      (function () {
+        try {
+          var themeKey = 'orbien-server-ui-theme'
+          var localeKey = 'orbien-server-ui-locale'
+          var theme = localStorage.getItem(themeKey)
+          if (theme !== 'light' && theme !== 'dark') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          document.documentElement.dataset.theme = theme
+          document.documentElement.style.colorScheme = theme
+
+          var locale = localStorage.getItem(localeKey)
+          if (locale !== 'zh-CN' && locale !== 'en-US') {
+            var nav = (navigator.language || '').toLowerCase()
+            locale = nav.indexOf('zh') === 0 ? 'zh-CN' : nav.indexOf('en') === 0 ? 'en-US' : 'zh-CN'
+          }
+          document.documentElement.lang = locale === 'en-US' ? 'en' : 'zh-CN'
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark'
+          document.documentElement.lang = 'zh-CN'
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

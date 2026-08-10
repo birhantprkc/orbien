@@ -1,0 +1,30 @@
+# orbien-server — multi-stage image (embeds server-ui via rust-embed)
+ARG RUST_VERSION=1.88
+
+FROM node:22-bookworm AS web
+WORKDIR /src
+COPY server-ui/package.json server-ui/package-lock.json ./server-ui/
+RUN cd server-ui && npm ci
+COPY server-ui/ ./server-ui/
+# vite outDir → ../server/assets
+RUN mkdir -p server/assets && cd server-ui && npm run build
+
+FROM rust:${RUST_VERSION}-bookworm AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY core ./core
+COPY client ./client
+COPY server ./server
+COPY --from=web /src/server/assets ./server/assets
+RUN cargo build --release -p orbien-server \
+    && strip target/release/orbien-server
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /src/target/release/orbien-server /usr/local/bin/orbien-server
+COPY docker/conf/orbien-server.toml /etc/orbien/orbien-server.toml
+EXPOSE 9527/tcp 9527/udp 9528/udp 80/tcp 443/tcp 8020/tcp
+ENTRYPOINT ["orbien-server"]
+CMD ["-c", "/etc/orbien/orbien-server.toml"]

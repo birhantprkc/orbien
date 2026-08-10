@@ -1,0 +1,38 @@
+mod https2http;
+
+use anyhow::{bail, Result};
+use async_trait::async_trait;
+use orbien_core::config::PluginConfig;
+use orbien_core::transport::DynStream;
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+pub struct PluginContext {
+    pub name: String,
+    pub cert_common_name: String,
+}
+
+#[allow(dead_code)]
+pub struct ConnectionInfo {
+    pub stream: DynStream,
+    pub src_addr: String,
+    pub src_port: u16,
+    pub dst_addr: String,
+    pub dst_port: u16,
+}
+
+#[async_trait]
+pub trait Plugin: Send + Sync {
+    fn name(&self) -> &str;
+    async fn handle(&self, conn: ConnectionInfo) -> Result<()>;
+}
+
+pub fn create(ctx: PluginContext, cfg: &PluginConfig) -> Result<Arc<dyn Plugin>> {
+    match cfg.plugin_type.as_str() {
+        "https2http" => {
+            let p = https2http::Https2HttpPlugin::new(ctx, cfg)?;
+            Ok(Arc::new(p))
+        }
+        other => bail!("unknown client plugin type: {other}"),
+    }
+}

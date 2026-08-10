@@ -1,0 +1,52 @@
+.features {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 0 4rem;
+  width: 100%;
+}
+
+.features :global(.container) {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-inline: clamp(calc(1.25rem + 30px), calc(4vw + 30px), calc(2.5rem + 30px));
+  box-sizing: border-box;
+}
+
+@media screen and (max-width: 996px) {
+  .features :global(.container) {
+    padding-inline: clamp(calc(1.25rem + 30px), calc(5vw + 30px), calc(1.75rem + 30px));
+  }
+}
+
+.featureCol {
+  margin-bottom: 1.25rem;
+}
+
+.featureCard {
+  height: 100%;
+  padding: 1.35rem 1.4rem 1.45rem;
+  border-radius: 14px;
+  background: var(--orbien-card-bg);
+  border: 1px solid var(--orbien-card-border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.featureCard:hover {
+  transform: translateY(-3px);
+  border-color: rgba(14, 165, 233, 0.35);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.featureTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.featureDesc {
+  margin: 0.65rem 0 0;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  font-size: 0.95rem;
+}

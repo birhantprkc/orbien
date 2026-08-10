@@ -1,0 +1,193 @@
+.wrap {
+  margin: 1.25rem 0 2rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.version {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: rgba(14, 165, 233, 0.12);
+  color: var(--ifm-color-primary-dark);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+}
+
+.releasesLink {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--orbien-card-border);
+  border-radius: 14px;
+  background: var(--orbien-panel-bg);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  display: table;
+  font-size: 0.92rem;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--orbien-card-bg);
+  text-align: left;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--orbien-card-border);
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--orbien-card-border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.osCell {
+  font-weight: 700;
+  background: linear-gradient(
+    90deg,
+    rgba(14, 165, 233, 0.06),
+    transparent 80%
+  );
+  white-space: nowrap;
+}
+
+.rowHighlight td {
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.6rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff !important;
+  text-decoration: none !important;
+  background: var(--ifm-color-primary);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.badge:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+.missing {
+  color: var(--ifm-color-emphasis-500);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-width: 14rem;
+}
+
+.docker {
+  margin-top: 1.75rem;
+  padding: 1.15rem 1.2rem 1.25rem;
+  border-radius: 14px;
+  border: 1px solid var(--orbien-card-border);
+  background: var(--orbien-card-bg);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.docker h3 {
+  margin: 0 0 0.85rem;
+  font-size: 1.05rem;
+}
+
+.dockerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.dockerItem {
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  background: var(--orbien-panel-bg);
+  border: 1px solid var(--orbien-card-border);
+}
+
+.dockerMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.dockerMeta strong {
+  font-size: 0.92rem;
+}
+
+.dockerTag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  color: var(--ifm-color-primary-dark);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.dockerCmd {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  background: var(--orbien-code-bg);
+  color: var(--orbien-code-fg);
+}
+
+@media screen and (max-width: 996px) {
+  .note {
+    max-width: none;
+    min-width: 10rem;
+  }
+}

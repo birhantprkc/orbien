@@ -1,0 +1,68 @@
+---
+sidebar_position: 5
+sidebar_label: SpringBoot集成
+---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Spring Boot 集成
+
+**Orbien**提供了一个轻量的Java客户端用于内嵌到`Spring Boot`应用中运行，仅支持TCP/HTTP/HTTPS协议代理，传输层只支持TCP传输协议，
+目前不支持**TCP**多路复用，因此对于服务端**开启多路复用**模式时，该Starter将不可用。
+
+<Tabs>
+    <TabItem value="Maven" label="Maven" default>
+        ```xml
+        <dependency>
+            <groupId>io.github.lxien</groupId>
+            <artifactId>orbien-spring-boot-starter</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        ```
+    </TabItem>
+    <TabItem value="Gradle" label="Gradle">
+        ```groovy
+        implementation("io.github.lxien:orbien-spring-boot-starter:2.0.0")
+        ```
+    </TabItem>
+</Tabs>
+
+
+```yaml
+# application.yml
+orbien:
+  enabled: true
+  server-addr: 127.0.0.1
+  token: YOUR_TOKEN # 可选
+  proxy:
+    type: http
+    custom-domains:
+      - web.domain.com
+
+```
+
+完整参考：
+
+```yaml
+# application.yml
+orbien:
+  enabled: true
+  server-addr: 127.0.0.1
+  server-port: 9527
+  token: YOUR_TOKEN
+  tcp-mux: false # 需与服务端一致（Java 客户端暂不支持多路复用）
+  pool-count: 1
+  heartbeat-interval-secs: 30
+  user: spring-boot-demo
+  # run-id: ""              # 可选；为空则从 run-id-file 恢复，或自动生成
+  # run-id-file: ""         # 可选；为空则使用用户目录下的默认路径
+  proxy:
+    name: web-demo
+    type: http
+    local-ip: 127.0.0.1
+    # local-port: 18080
+    custom-domains:
+      - web.domain.com
+    # subdomain: web       # 可选，与 custom-domains 二选一
+
+```

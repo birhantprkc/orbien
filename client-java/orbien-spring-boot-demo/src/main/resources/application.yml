@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: orbien-spring-boot-demo
+  profiles:
+    active: easy
+
+server:
+  port: 18080
+
+logging:
+  level:
+    io.github.lxien.orbien: INFO

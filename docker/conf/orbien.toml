@@ -1,0 +1,13 @@
+serverAddr = "127.0.0.1"
+serverPort = 9527
+
+#[auth]
+#method = "token"
+#token = "YOUR_TOKEN"
+
+[[proxies]]
+name = "mysql"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3306
+remotePort = 6050
