@@ -48,10 +48,22 @@ jobs:
             target: x86_64-unknown-linux-gnu
             goos: linux
             goarch: amd64
+            libc: gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            goos: linux
+            goarch: amd64
+            libc: musl
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             goos: linux
             goarch: arm64
+            libc: gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            goos: linux
+            goarch: arm64
+            libc: musl
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             goos: windows
@@ -84,6 +96,12 @@ jobs:
           npm ci
           npm run build
 
+      - name: Install musl toolchain
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -95,6 +113,9 @@ jobs:
 
       - name: Build orbien-server + orbien
         shell: bash
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: |
           cargo build --release --locked \
             -p orbien-server -p orbien-client \
@@ -111,28 +132,44 @@ jobs:
           EXT=""
           if [[ "${{ matrix.goos }}" == "windows" ]]; then EXT=".exe"; fi
           BIN_DIR="target/${TARGET}/release"
+          LIBC="${{ matrix.libc }}"
 
-          ./scripts/pack-release.sh \
-            --name orbien-server \
-            --version "$VERSION" \
-            --os "${{ matrix.goos }}" \
-            --arch "${{ matrix.goarch }}" \
-            --outdir "$OUT" \
-            --bin "${BIN_DIR}/orbien-server${EXT}" \
-            --config pack/conf/orbien-server.toml
+          pack_one() {
+            local name="$1"
+            local bin="$2"
+            local conf="$3"
+            if [[ -n "$LIBC" ]]; then
+              ./scripts/pack-release.sh \
+                --name "$name" \
+                --version "$VERSION" \
+                --os "${{ matrix.goos }}" \
+                --arch "${{ matrix.goarch }}" \
+                --libc "$LIBC" \
+                --outdir "$OUT" \
+                --bin "$bin" \
+                --config "$conf"
+            else
+              ./scripts/pack-release.sh \
+                --name "$name" \
+                --version "$VERSION" \
+                --os "${{ matrix.goos }}" \
+                --arch "${{ matrix.goarch }}" \
+                --outdir "$OUT" \
+                --bin "$bin" \
+                --config "$conf"
+            fi
+          }
 
-          ./scripts/pack-release.sh \
-            --name orbien \
-            --version "$VERSION" \
-            --os "${{ matrix.goos }}" \
-            --arch "${{ matrix.goarch }}" \
-            --outdir "$OUT" \
-            --bin "${BIN_DIR}/orbien${EXT}" \
-            --config pack/conf/orbien.toml
+          pack_one orbien-server \
+            "${BIN_DIR}/orbien-server${EXT}" \
+            pack/conf/orbien-server.toml
+          pack_one orbien \
+            "${BIN_DIR}/orbien${EXT}" \
+            pack/conf/orbien.toml
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: cli-${{ matrix.target }}
           path: dist/release/*.tar.gz
           if-no-files-found: error
 
@@ -563,3 +600,4 @@ jobs:
             artifacts/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
