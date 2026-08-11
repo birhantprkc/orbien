@@ -44,6 +44,8 @@ export interface ClientInfo {
     runId: string
     user: string
     hostname: string
+    os: string
+    arch: string
     clientIP: string
     version: string
     proxyCount: number

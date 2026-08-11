@@ -4,6 +4,9 @@ import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 import {useLocale} from '@/composables/useLocale'
 import {useSidebar} from '@/composables/useSidebar'
 import logoUrl from '@/assets/images/logo.png'
+import githubIcon from '@/assets/icon/github.svg?raw'
+
+const GITHUB_URL = 'https://github.com/orbien-org/orbien'
 
 const {t} = useLocale()
 const {isMobile, mobileOpen, toggleCollapsed} = useSidebar()
@@ -35,8 +38,41 @@ const {isMobile, mobileOpen, toggleCollapsed} = useSidebar()
     </div>
 
     <div class="actions">
+      <a
+          class="icon-btn github-link"
+          :href="GITHUB_URL"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="t('actions.github')"
+          :title="t('actions.github')"
+      >
+        <span class="github-icon" aria-hidden="true" v-html="githubIcon"/>
+      </a>
       <LocaleSwitcher/>
       <ThemeToggle/>
     </div>
   </header>
 </template>
+
+<style scoped>
+.github-link {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.github-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  line-height: 0;
+}
+
+.github-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+  stroke: none;
+}
+</style>

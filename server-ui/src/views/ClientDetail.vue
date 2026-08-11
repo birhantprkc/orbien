@@ -2,6 +2,7 @@
 import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import OsBadge from '@/components/OsBadge.vue'
 import PaginationBar from '@/components/PaginationBar.vue'
 import TrafficIO from '@/components/TrafficIO.vue'
 import {fetchClient, fetchProxies, kickClient} from '@/api'
@@ -56,11 +57,6 @@ function formatSeen(secs: number, online: boolean) {
   if (n < 86400) return t('clients.agoHours', {n: Math.floor(n / 3600)})
   return t('clients.agoDays', {n: Math.floor(n / 86400)})
 }
-
-const avatarChar = computed(() => {
-  const id = client.value?.runId || runId.value
-  return (id.charAt(0) || '?').toUpperCase()
-})
 
 function goBack() {
   if (window.history.length > 1) router.back()
@@ -229,7 +225,9 @@ onUnmounted(() => {
       <section class="summary card">
         <div class="summary-head">
           <div class="head-left">
-            <div class="avatar" aria-hidden="true">{{ avatarChar }}</div>
+            <div class="avatar" aria-hidden="true">
+              <OsBadge :os="client.os" :arch="client.arch" icon-only size="md"/>
+            </div>
             <div class="head-body">
               <div class="title-row">
                 <h2 class="name mono">{{ client.runId }}</h2>
@@ -238,7 +236,7 @@ onUnmounted(() => {
               </div>
               <div class="meta">
                 <span v-if="client.clientIP" class="mono">{{ client.clientIP }}</span>
-                <span v-if="client.hostname">{{ client.hostname }}</span>
+                <OsBadge :os="client.os" :arch="client.arch" size="md" text-only/>
               </div>
             </div>
           </div>
@@ -266,16 +264,16 @@ onUnmounted(() => {
             <strong>{{ client.curConns ?? 0 }}</strong>
           </div>
           <div class="info-item" role="listitem">
-            <em>{{ t('clients.runId') }}</em>
-            <strong class="mono">{{ client.runId }}</strong>
-          </div>
-          <div class="info-item" role="listitem">
             <em>{{ t('clients.proxies') }}</em>
             <strong>{{ client.proxyCount ?? 0 }}</strong>
           </div>
           <div class="info-item" role="listitem">
             <em>{{ isOnline(client.status) ? t('clients.connected') : t('clients.disconnected') }}</em>
             <strong>{{ formatSeen(client.connectedSecs, isOnline(client.status)) }}</strong>
+          </div>
+          <div v-if="client.hostname" class="info-item" role="listitem">
+            <em>{{ t('clients.hostname') }}</em>
+            <strong>{{ client.hostname }}</strong>
           </div>
         </div>
       </section>
@@ -459,12 +457,13 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+.avatar :deep(.os-icon) {
+  width: 1.45rem;
+  height: 1.45rem;
 }
 
 .head-body {

@@ -81,7 +81,8 @@ pub struct ClientInfo {
     pub run_id: String,
     pub user: String,
     pub hostname: String,
-
+    pub os: String,
+    pub arch: String,
     #[serde(rename = "clientIP")]
     pub client_ip: String,
     pub version: String,

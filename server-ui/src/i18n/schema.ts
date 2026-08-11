@@ -17,6 +17,7 @@ export interface MessageSchema {
         themeLightHint: string
         themeDarkHint: string
         locale: string
+        github: string
         collapseSidebar: string
         expandSidebar: string
         openMenu: string
@@ -88,6 +89,16 @@ export interface MessageSchema {
         user: string
         hostname: string
         ip: string
+        os: string
+        arch: string
+        osFamily: {
+            windows: string
+            macos: string
+            linux: string
+            android: string
+            freebsd: string
+            other: string
+        }
         version: string
         status: string
         proxies: string

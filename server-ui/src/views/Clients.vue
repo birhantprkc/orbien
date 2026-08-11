@@ -2,6 +2,7 @@
 import {computed, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import OsBadge from '@/components/OsBadge.vue'
 import PaginationBar from '@/components/PaginationBar.vue'
 import {kickClient} from '@/api'
 import {useDashboardStore} from '@/stores/dashboard'
@@ -151,7 +152,8 @@ async function onKick(runId: string, evt: Event) {
         @keydown="onKeyOpen($event, c.runId)"
     >
       <div class="client-left">
-        <div class="status-icon" :class="{ online: isOnline(c.status) }" aria-hidden="true">
+        <div class="os-avatar" :class="{ online: isOnline(c.status) }" aria-hidden="true">
+          <OsBadge :os="c.os" :arch="c.arch" icon-only/>
           <span class="dot"/>
         </div>
 
@@ -170,6 +172,7 @@ async function onKick(runId: string, evt: Event) {
               {{ t('clients.ip') }}
               <strong class="mono">{{ c.clientIP || '—' }}</strong>
             </span>
+            <OsBadge :os="c.os" :arch="c.arch" text-only/>
             <span class="seen">
               <svg viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M2 12V8.5M5.5 12V5M9 12V7M12.5 12V3.5"/>
@@ -313,43 +316,54 @@ async function onKick(runId: string, evt: Event) {
   flex: 1;
 }
 
-.status-icon {
-  width: 2.35rem;
-  height: 2.35rem;
+.os-avatar {
+  position: relative;
+  width: 2.45rem;
+  height: 2.45rem;
   border-radius: 10px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--muted) 16%, transparent);
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--muted) 14%, transparent);
 }
 
-.status-icon.online {
+.os-avatar.online {
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-.dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--muted);
+.os-avatar :deep(.os-icon) {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
-.status-icon.online .dot {
+.os-avatar .dot {
+  position: absolute;
+  right: -0.12rem;
+  bottom: -0.12rem;
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 50%;
+  background: var(--muted);
+  border: 2px solid var(--panel);
+  box-sizing: content-box;
+}
+
+.os-avatar.online .dot {
   background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
 @keyframes pulse-dot {
   0%,
   100% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
     opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 8%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 8%, transparent);
     opacity: 0.85;
   }
 }

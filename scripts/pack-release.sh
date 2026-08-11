@@ -5,6 +5,7 @@ NAME=""
 VERSION=""
 OS=""
 ARCH=""
+LIBC=""
 OUTDIR="dist/release"
 BIN=""
 CONFIG=""
@@ -16,6 +17,7 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="$2"; shift 2 ;;
     --os) OS="$2"; shift 2 ;;
     --arch) ARCH="$2"; shift 2 ;;
+    --libc) LIBC="$2"; shift 2 ;;
     --outdir) OUTDIR="$2"; shift 2 ;;
     --bin) BIN="$2"; shift 2 ;;
     --config) CONFIG="$2"; shift 2 ;;
@@ -30,6 +32,14 @@ if [[ -z "$NAME" || -z "$VERSION" || -z "$OS" || -z "$ARCH" || -z "$BIN" ]]; the
 fi
 if [[ ! -f "$BIN" ]]; then
   echo "binary not found: $BIN" >&2
+  exit 1
+fi
+if [[ "$OS" == "linux" && -z "$LIBC" ]]; then
+  echo "linux packages require --libc gnu|musl" >&2
+  exit 1
+fi
+if [[ -n "$LIBC" && "$LIBC" != "gnu" && "$LIBC" != "musl" ]]; then
+  echo "invalid --libc: $LIBC (expected gnu|musl)" >&2
   exit 1
 fi
 
@@ -77,7 +87,11 @@ if [[ -n "$ASSETS" ]]; then
 fi
 
 mkdir -p "$OUTDIR"
-ARCHIVE="${OUTDIR}/${NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
+if [[ -n "$LIBC" ]]; then
+  ARCHIVE="${OUTDIR}/${NAME}_${VERSION}_${OS}_${ARCH}_${LIBC}.tar.gz"
+else
+  ARCHIVE="${OUTDIR}/${NAME}_${VERSION}_${OS}_${ARCH}.tar.gz"
+fi
 tar -C "$STAGE" -czf "$ARCHIVE" .
 echo "wrote ${ARCHIVE}"
 ls -lh "$ARCHIVE"
