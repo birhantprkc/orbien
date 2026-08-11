@@ -11,6 +11,9 @@
   <a href="https://github.com/orbien-org/orbien/forks">
     <img src="https://img.shields.io/github/forks/orbien-org/orbien?style=for-the-badge&logo=github" alt="GitHub Forks"/>
   </a>
+  <a href="https://github.com/orbien-org/orbien/issues">
+    <img src="https://img.shields.io/github/issues/orbien-org/orbien?style=for-the-badge&logo=github" alt="GitHub Issues"/>
+  </a>
   <a href="https://github.com/orbien-org/orbien/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/orbien-org/orbien?style=for-the-badge" alt="License"/>
   </a>
@@ -18,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-2.0.0-blue?style=for-the-badge" alt="orbien:2.0.0"/>
+    <img src="https://img.shields.io/badge/orbien-2.1.0-blue?style=for-the-badge" alt="orbien:2.1.0"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -37,7 +40,7 @@
 
 ![dashboard_zh.png](doc/img/dashboard_zh.png)
 
-一个轻量、高性能、安全的内网穿透工具，二进制体积不到 `5MB`
+一个轻量、高性能、安全的内网穿透工具，二进制体积 `5MB`左右
 
 ## 功能特性
 
