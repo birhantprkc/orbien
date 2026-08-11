@@ -1,7 +1,8 @@
 ---
-sidebar_position: 9
+sidebar_position: 93
 sidebar_label: 社区和贡献
 ---
+
 # 社区和贡献
 
 - Discord：[Orbien](https://discord.gg/4dgQjCS3k)

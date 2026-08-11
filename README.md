@@ -32,7 +32,7 @@
   <a href="README.md"><strong>English</strong></a> &nbsp;|&nbsp;
   <a href="README_ZH.md"><strong>简体中文</strong></a>
   &nbsp;|&nbsp;
-  <a href="https://github.com/orbien-org/orbien"><strong>GitHub</strong></a>
+  <a href="https://orbien-org.github.io/orbien/"><strong>Docs</strong></a>
 </div>
 
 ![dashboard.png](doc/img/dashboard.png)

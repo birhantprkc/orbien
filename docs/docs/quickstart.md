@@ -2,7 +2,8 @@
 sidebar_position: 3
 title: 快速开始
 ---
-# 安装
+
+# 快速开始
 
 [下载](download.mdx)对应平台的二进制压缩包解压
 
@@ -18,10 +19,9 @@ bindPort = 9527
 ./orbien-server -c orbien-server.toml
 ```
 
-
 ## 客户端
 
-如果觉得命令行CLI操作麻烦，可以使用[Orbien-Desktop](download.mdx)桌面端
+如果觉得命令行 CLI 操作麻烦，可以使用 [Orbien Desktop](download.mdx) 桌面端（不过内存占用比较大，内存受限时不建议使用）
 
 ```toml
 # orbien.toml
@@ -39,3 +39,5 @@ remotePort = 6050
 ```shell
 ./orbien -c orbien.toml
 ```
+
+

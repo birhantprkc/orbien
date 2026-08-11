@@ -9,35 +9,40 @@ const FALLBACK_VERSION = '2.0.0';
 
 type OsId = 'windows' | 'linux' | 'darwin' | 'freebsd';
 type ArchId = 'amd64' | 'arm64';
+type LibcId = 'gnu' | 'musl';
 type ProductId = 'orbien-server' | 'orbien' | 'orbien-desktop';
 type AssetExt = 'tar.gz' | 'deb' | 'msi' | 'dmg';
 
 type Row = {
     os: OsId;
     arch: ArchId;
-    archLabel: string;
+    libc?: LibcId;
     note: string;
 };
 
 const RELEASE_BUILDS: ReadonlySet<string> = new Set([
-    'orbien-server|linux|amd64',
-    'orbien-server|linux|arm64',
+    'orbien-server|linux|amd64|gnu',
+    'orbien-server|linux|amd64|musl',
+    'orbien-server|linux|arm64|gnu',
+    'orbien-server|linux|arm64|musl',
     'orbien-server|windows|amd64',
     'orbien-server|windows|arm64',
     'orbien-server|darwin|amd64',
     'orbien-server|darwin|arm64',
     'orbien-server|freebsd|amd64',
 
-    'orbien|linux|amd64',
-    'orbien|linux|arm64',
+    'orbien|linux|amd64|gnu',
+    'orbien|linux|amd64|musl',
+    'orbien|linux|arm64|gnu',
+    'orbien|linux|arm64|musl',
     'orbien|windows|amd64',
     'orbien|windows|arm64',
     'orbien|darwin|amd64',
     'orbien|darwin|arm64',
     'orbien|freebsd|amd64',
 
-    'orbien-desktop|linux|amd64',
-    'orbien-desktop|linux|arm64',
+    'orbien-desktop|linux|amd64|gnu',
+    'orbien-desktop|linux|arm64|gnu',
     'orbien-desktop|windows|amd64',
     'orbien-desktop|windows|arm64',
     'orbien-desktop|darwin|amd64',
@@ -45,21 +50,41 @@ const RELEASE_BUILDS: ReadonlySet<string> = new Set([
 ]);
 
 const ROWS: Row[] = [
-    {os: 'linux', arch: 'amd64', archLabel: 'amd64', note: ''},
-    {os: 'linux', arch: 'arm64', archLabel: 'arm64', note: ''},
-    {os: 'freebsd', arch: 'amd64', archLabel: 'amd64', note: ''},
-    {os: 'windows', arch: 'amd64', archLabel: 'x86_64', note: ''},
-    {os: 'windows', arch: 'arm64', archLabel: 'arm64', note: ''},
+    {
+        os: 'linux',
+        arch: 'amd64',
+        libc: 'gnu',
+        note: '动态链接 glibc',
+    },
+    {
+        os: 'linux',
+        arch: 'amd64',
+        libc: 'musl',
+        note: '静态链接，兼容旧 glibc',
+    },
+    {
+        os: 'linux',
+        arch: 'arm64',
+        libc: 'gnu',
+        note: '动态链接 glibc',
+    },
+    {
+        os: 'linux',
+        arch: 'arm64',
+        libc: 'musl',
+        note: '静态链接，兼容旧 glibc',
+    },
+    {os: 'freebsd', arch: 'amd64', note: ''},
+    {os: 'windows', arch: 'amd64', note: ''},
+    {os: 'windows', arch: 'arm64', note: ''},
     {
         os: 'darwin',
         arch: 'amd64',
-        archLabel: 'x86_64',
         note: '如遇拦截，于系统设置中允许运行',
     },
     {
         os: 'darwin',
         arch: 'arm64',
-        archLabel: 'arm64',
         note: '如遇拦截，于系统设置中允许运行',
     },
 ];
@@ -69,6 +94,11 @@ const OS_LABEL: Record<OsId, string> = {
     darwin: 'macOS',
     linux: 'Linux',
     freebsd: 'FreeBSD',
+};
+
+const ARCH_LABEL: Record<ArchId, string> = {
+    amd64: 'amd64',
+    arm64: 'arm64',
 };
 
 const PRODUCTS = [
@@ -89,12 +119,22 @@ const PRODUCTS = [
     },
 ] as const;
 
-function buildKey(product: ProductId, os: OsId, arch: ArchId): string {
-    return `${product}|${os}|${arch}`;
+function buildKey(
+    product: ProductId,
+    os: OsId,
+    arch: ArchId,
+    libc?: LibcId,
+): string {
+    return libc ? `${product}|${os}|${arch}|${libc}` : `${product}|${os}|${arch}`;
 }
 
-function isReleaseBuild(product: ProductId, os: OsId, arch: ArchId): boolean {
-    return RELEASE_BUILDS.has(buildKey(product, os, arch));
+function isReleaseBuild(
+    product: ProductId,
+    os: OsId,
+    arch: ArchId,
+    libc?: LibcId,
+): boolean {
+    return RELEASE_BUILDS.has(buildKey(product, os, arch, libc));
 }
 
 function assetExt(product: ProductId, os: OsId): AssetExt {
@@ -118,8 +158,28 @@ function assetName(
     version: string,
     os: OsId,
     arch: ArchId,
+    libc?: LibcId,
 ): string {
-    return `${product}_${version}_${os}_${arch}.${assetExt(product, os)}`;
+    const ext = assetExt(product, os);
+    if (product === 'orbien-desktop') {
+        return `${product}_${version}_${os}_${arch}.${ext}`;
+    }
+    if (libc) {
+        return `${product}_${version}_${os}_${arch}_${libc}.${ext}`;
+    }
+    return `${product}_${version}_${os}_${arch}.${ext}`;
+}
+
+function badgeLabel(
+    product: ProductId,
+    os: OsId,
+    libc?: LibcId,
+): string {
+    const ext = assetExt(product, os);
+    if (product !== 'orbien-desktop' && libc) {
+        return `${libc} · ${ext}`;
+    }
+    return ext;
 }
 
 function assetUrl(filename: string, version: string): string {
@@ -181,7 +241,7 @@ export default function DownloadMatrix(): ReactNode {
                     setAssetSet(new Set(data.assets.map((a) => a.name)));
                 }
             } catch {
-
+                // keep fallback version / optimistic links
             }
         })();
         return () => {
@@ -222,6 +282,7 @@ export default function DownloadMatrix(): ReactNode {
                     <tr>
                         <th>操作系统</th>
                         <th>架构</th>
+                        <th>libc</th>
                         {PRODUCTS.map((p) => (
                             <th key={p.id}>{p.label}</th>
                         ))}
@@ -232,23 +293,58 @@ export default function DownloadMatrix(): ReactNode {
                     {ROWS.map((row, idx) => {
                         const span = osRowSpans.get(idx);
                         const showOs = span !== undefined;
+                        const rowLibc =
+                            row.os === 'linux' ? row.libc : undefined;
                         return (
                             <tr
-                                key={`${row.os}-${row.arch}`}
-                                className={clsx(detected === row.os && styles.rowHighlight)}>
+                                key={`${row.os}-${row.arch}-${row.libc ?? 'default'}`}
+                                className={clsx(
+                                    detected === row.os && styles.rowHighlight,
+                                )}>
                                 {showOs ? (
                                     <td rowSpan={span} className={styles.osCell}>
                                         {OS_LABEL[row.os]}
                                     </td>
                                 ) : null}
                                 <td>
-                                    <code>{row.archLabel}</code>
+                                    <code>{ARCH_LABEL[row.arch]}</code>
+                                </td>
+                                <td>
+                                    {rowLibc ? (
+                                        <code className={styles.libcTag}>
+                                            {rowLibc}
+                                        </code>
+                                    ) : null}
                                 </td>
                                 {PRODUCTS.map((p) => {
-                                    const built = isReleaseBuild(p.name, row.os, row.arch);
-                                    const ext = assetExt(p.name, row.os);
-                                    const file = assetName(p.name, version, row.os, row.arch);
-                                    const published = assetSet ? assetSet.has(file) : true;
+                                    const isDesktop = p.name === 'orbien-desktop';
+                                    const libcKey = isDesktop
+                                        ? row.os === 'linux' &&
+                                          row.libc === 'gnu'
+                                            ? 'gnu'
+                                            : undefined
+                                        : rowLibc;
+                                    const built = isReleaseBuild(
+                                        p.name,
+                                        row.os,
+                                        row.arch,
+                                        libcKey,
+                                    );
+                                    const label = badgeLabel(
+                                        p.name,
+                                        row.os,
+                                        isDesktop ? undefined : rowLibc,
+                                    );
+                                    const file = assetName(
+                                        p.name,
+                                        version,
+                                        row.os,
+                                        row.arch,
+                                        isDesktop ? undefined : rowLibc,
+                                    );
+                                    const published = assetSet
+                                        ? assetSet.has(file)
+                                        : true;
                                     const showLink = built && published;
                                     return (
                                         <td key={p.id}>
@@ -256,14 +352,11 @@ export default function DownloadMatrix(): ReactNode {
                                                 <a
                                                     className={styles.badge}
                                                     href={assetUrl(file, version)}
+                                                    title={file}
                                                     rel="noopener noreferrer">
-                                                    {ext}
+                                                    {label}
                                                 </a>
-                                            ) : (
-                                                <span className={styles.missing} title={file}>
-                                                    
-                                                </span>
-                                            )}
+                                            ) : null}
                                         </td>
                                     );
                                 })}
