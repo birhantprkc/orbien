@@ -992,7 +992,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "orbien-client"
-version = "2.0.0"
+version = "2.1.0-SNAPSHOT"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1012,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "orbien-core"
-version = "2.0.0"
+version = "2.1.0-SNAPSHOT"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "orbien-server"
-version = "2.0.0"
+version = "2.1.0-SNAPSHOT"
 dependencies = [
  "anyhow",
  "axum",

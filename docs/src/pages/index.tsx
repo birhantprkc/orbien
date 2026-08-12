@@ -42,7 +42,7 @@ function HomepageHeader(): ReactNode {
                     </Heading>
                     <p className={styles.heroTagline}>由 Rust 与 Tokio 驱动</p>
                     <p className={styles.heroDesc}>
-                        轻量、高性能、安全的内网穿透与反向代理，二进制体积不到 5MB
+                        轻量、高性能、安全的内网穿透与反向代理，二进制体积5MB左右
                     </p>
                     <div className={styles.heroActions}>
                         <Link
@@ -81,7 +81,7 @@ function DesktopShowcase(): ReactNode {
                         桌面客户端
                     </Heading>
                     <p className={styles.desktopDesc}>
-                        基于Tauri开发的轻量跨平台桌面客户端
+                        通过可视化管理界面轻松管理穿透配置
                     </p>
                     <Link
                         className={clsx('button button--lg', styles.btnSecondary)}
