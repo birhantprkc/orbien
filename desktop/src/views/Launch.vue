@@ -7,7 +7,7 @@ import type {MessageSchema} from "@/i18n";
 
 const router = useRouter();
 const {t} = useI18n<{ message: MessageSchema }>();
-const status = ref<ClientStatus>({running: false, runningSecs: 0, version: "2.0.0"});
+const status = ref<ClientStatus>({running: false, runningSecs: 0, version: "2.1.0-SNAPSHOT"});
 const busy = ref(false);
 const error = ref("");
 
