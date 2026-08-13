@@ -4,9 +4,7 @@ members = [
     "core",
     "client",
     "server",
-]
-exclude = [
-    "desktop/src-tauri",
+    "desktop",
 ]
 
 [workspace.package]
@@ -29,8 +27,9 @@ opt-level = "z"
 
 [workspace.dependencies]
 orbien-core = { path = "core" }
+orbien-client = { path = "client" }
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["io", "compat"] }
+tokio-util = { version = "0.7", features = ["io", "compat", "rt"] }
 futures = "0.3"
 yamux = "0.13"
 serde = { version = "1", features = ["derive"] }

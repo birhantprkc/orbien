@@ -5,23 +5,26 @@ use anyhow::{anyhow, Result};
 use orbien_core::auth;
 use orbien_core::config::ClientConfig;
 use orbien_core::msg::{self, Login, Message, NewProxy, NewWorkConn, Ping};
+use orbien_core::transport::DynStream;
+use orbien_core::VERSION;
 use std::path::Path;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::io::{AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
+use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub enum SessionEnd {
     Disconnected { run_id: String },
     Kicked { run_id: String, reason: String },
 }
-use orbien_core::transport::DynStream;
-use orbien_core::VERSION;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::io::{ReadHalf, WriteHalf};
-use tokio::sync::Mutex;
-use tokio::time::interval;
 
 type CtrlRead = ReadHalf<DynStream>;
 type CtrlWrite = WriteHalf<DynStream>;
+type OnProxyRemote = Arc<dyn Fn(String, String) + Send + Sync>;
 
 pub struct Control {
     cfg: ClientConfig,
@@ -30,6 +33,9 @@ pub struct Control {
     writer: Mutex<CtrlWrite>,
     proxies: ProxyManager,
     connector: Arc<dyn Connector>,
+    cancel: CancellationToken,
+    work_tasks: Mutex<JoinSet<()>>,
+    on_proxy_remote: OnProxyRemote,
 }
 
 impl Control {
@@ -37,7 +43,11 @@ impl Control {
         cfg: &ClientConfig,
         previous_run_id: String,
         config_path: &Path,
+        parent_cancel: CancellationToken,
+        on_connected: impl FnOnce(),
+        on_proxy_remote: OnProxyRemote,
     ) -> Result<SessionEnd> {
+        let session_cancel = parent_cancel.child_token();
         let connector = build_connector(cfg).await?;
         let mut stream = connector.open().await?;
         tracing::info!(
@@ -96,16 +106,28 @@ impl Control {
             writer: Mutex::new(writer),
             proxies: ProxyManager::from_config(cfg)?,
             connector,
+            cancel: session_cancel.clone(),
+            work_tasks: Mutex::new(JoinSet::new()),
+            on_proxy_remote,
         });
 
         ctl.register_all_proxies().await?;
+        on_connected();
 
         let hb = Arc::clone(&ctl);
-        let heartbeat = tokio::spawn(async move { hb.heartbeat_loop().await });
+        let hb_cancel = session_cancel.clone();
+        let heartbeat = tokio::spawn(async move {
+            tokio::select! {
+                _ = hb_cancel.cancelled() => {}
+                _ = hb.heartbeat_loop() => {}
+            }
+        });
 
-        let result = ctl.reader_loop().await;
+        let result = ctl.clone().reader_loop().await;
+        ctl.shutdown().await;
         heartbeat.abort();
         let _ = heartbeat.await;
+
         match result {
             Ok(ReaderEnd::Kicked(reason)) => Ok(SessionEnd::Kicked {
                 run_id: resp.run_id,
@@ -116,6 +138,17 @@ impl Control {
             }),
             Err(e) => Err(e),
         }
+    }
+
+    async fn shutdown(&self) {
+        self.cancel.cancel();
+        {
+            let mut writer = self.writer.lock().await;
+            let _ = writer.shutdown().await;
+        }
+        let mut tasks = self.work_tasks.lock().await;
+        tasks.abort_all();
+        while tasks.join_next().await.is_some() {}
     }
 
     async fn register_all_proxies(&self) -> Result<()> {
@@ -212,11 +245,22 @@ impl Control {
 
     async fn reader_loop(self: Arc<Self>) -> Result<ReaderEnd> {
         loop {
-            let msg = {
-                let mut reader = self.reader.lock().await;
-                match msg::read_msg(&mut *reader).await {
-                    Ok(m) => m,
-                    Err(_) => return Ok(ReaderEnd::Closed),
+            if self.cancel.is_cancelled() {
+                return Ok(ReaderEnd::Closed);
+            }
+
+            let msg = tokio::select! {
+                _ = self.cancel.cancelled() => {
+                    return Ok(ReaderEnd::Closed);
+                }
+                msg = async {
+                    let mut reader = self.reader.lock().await;
+                    msg::read_msg(&mut *reader).await
+                } => {
+                    match msg {
+                        Ok(m) => m,
+                        Err(_) => return Ok(ReaderEnd::Closed),
+                    }
                 }
             };
 
@@ -227,19 +271,30 @@ impl Control {
                 }
                 Message::ReqWorkConn(_) => {
                     let ctl = Arc::clone(&self);
-                    tokio::spawn(async move {
-                        if let Err(e) = ctl.handle_req_work_conn().await {
-                            tracing::error!(error = %e, "work tunnel failed");
+                    let cancel = self.cancel.clone();
+                    self.work_tasks.lock().await.spawn(async move {
+                        tokio::select! {
+                            _ = cancel.cancelled() => {}
+                            res = ctl.handle_req_work_conn() => {
+                                if let Err(e) = res {
+                                    tracing::error!(error = %e, "work tunnel failed");
+                                }
+                            }
                         }
                     });
                 }
                 Message::NewProxyResp(resp) => {
                     if resp.error.is_empty() {
+                        let remote = normalize_remote_addr(
+                            &self.cfg.server_addr,
+                            &resp.remote_addr,
+                        );
                         tracing::info!(
                             name = %resp.proxy_name,
-                            remote = %resp.remote_addr,
+                            remote = %remote,
                             "proxy started"
                         );
+                        (self.on_proxy_remote)(resp.proxy_name.clone(), remote);
                     } else {
                         tracing::error!(
                             name = %resp.proxy_name,
@@ -268,6 +323,9 @@ impl Control {
         let mut tick = interval(Duration::from_secs(secs as u64));
         tick.tick().await;
         loop {
+            if self.cancel.is_cancelled() {
+                break;
+            }
             tick.tick().await;
             let timestamp = now_secs();
             let ping = Ping {
@@ -298,9 +356,18 @@ impl Control {
         )
         .await?;
 
-        let start = match msg::read_msg(&mut work).await? {
-            Message::StartWorkConn(s) => s,
-            other => return Err(anyhow!("expected StartWorkConn, got {}", other.type_byte())),
+        let start = tokio::select! {
+            _ = self.cancel.cancelled() => {
+                return Ok(());
+            }
+            msg = msg::read_msg(&mut work) => {
+                match msg? {
+                    Message::StartWorkConn(s) => s,
+                    other => {
+                        return Err(anyhow!("expected StartWorkConn, got {}", other.type_byte()))
+                    }
+                }
+            }
         };
 
         if !start.error.is_empty() {
@@ -344,6 +411,20 @@ fn omit_client_mode(mode: &str) -> String {
         "" | "client" => String::new(),
         other => other.to_string(),
     }
+}
+
+fn normalize_remote_addr(server_addr: &str, remote_addr: &str) -> String {
+    let remote = remote_addr.trim();
+    if remote.is_empty() {
+        return String::new();
+    }
+    if let Some(port) = remote.strip_prefix(':') {
+        let host = server_addr.trim();
+        if !host.is_empty() && !port.is_empty() {
+            return format!("{host}:{port}");
+        }
+    }
+    remote.to_string()
 }
 
 fn new_proxy_base(
