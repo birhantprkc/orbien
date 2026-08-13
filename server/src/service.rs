@@ -455,11 +455,29 @@ impl Service {
 
     pub async fn kick_client(&self, run_id: &str) -> Result<()> {
         let control = {
-            let map = self.controls.lock().await;
-            map.get(run_id).cloned()
+            let mut map = self.controls.lock().await;
+            map.remove(run_id)
         };
         match control {
             Some(c) => {
+                let proxy_count = c.proxy_count().await;
+                {
+                    let mut offline = self.offline_clients.lock().await;
+                    offline.insert(
+                        run_id.to_string(),
+                        OfflineClientRecord {
+                            run_id: run_id.to_string(),
+                            user: c.user.clone(),
+                            hostname: c.hostname.clone(),
+                            os: c.os.clone(),
+                            arch: c.arch.clone(),
+                            client_ip: c.client_ip.clone(),
+                            version: c.version.clone(),
+                            proxy_count,
+                            disconnected_at: Instant::now(),
+                        },
+                    );
+                }
                 c.kick("kicked from dashboard").await;
                 Ok(())
             }

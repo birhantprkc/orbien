@@ -38,6 +38,7 @@ pub struct Control {
     work_tx: mpsc::Sender<DynStream>,
     work_rx: Mutex<mpsc::Receiver<DynStream>>,
     work_notify: Notify,
+    shutdown_notify: Notify,
     proxies: Mutex<ProxyManager>,
     bg_tasks: Mutex<JoinSet<()>>,
     closed: AtomicBool,
@@ -82,6 +83,7 @@ impl Control {
             work_tx,
             work_rx: Mutex::new(work_rx),
             work_notify: Notify::new(),
+            shutdown_notify: Notify::new(),
             proxies: Mutex::new(ProxyManager::new()),
             bg_tasks: Mutex::new(JoinSet::new()),
             closed: AtomicBool::new(false),
@@ -103,6 +105,9 @@ impl Control {
 
     pub async fn run(self: Arc<Self>) -> Result<()> {
         for _ in 0..self.pool_count {
+            if self.closed.load(Ordering::SeqCst) {
+                return Ok(());
+            }
             self.request_work_conn().await?;
         }
 
@@ -110,9 +115,24 @@ impl Control {
             if self.closed.load(Ordering::SeqCst) {
                 break;
             }
-            let msg = {
-                let mut reader = self.reader.lock().await;
-                msg::read_msg(&mut *reader).await?
+            let msg = tokio::select! {
+                _ = self.shutdown_notify.notified() => {
+                    break;
+                }
+                msg = async {
+                    let mut reader = self.reader.lock().await;
+                    msg::read_msg(&mut *reader).await
+                } => {
+                    match msg {
+                        Ok(m) => m,
+                        Err(e) => {
+                            if !self.closed.load(Ordering::SeqCst) {
+                                tracing::debug!(error = %e, "control read ended");
+                            }
+                            break;
+                        }
+                    }
+                }
             };
 
             match msg {
@@ -128,7 +148,12 @@ impl Control {
     }
 
     pub async fn shutdown(&self) {
-        self.closed.store(true, Ordering::SeqCst);
+        if self.closed.swap(true, Ordering::SeqCst) {
+            self.shutdown_notify.notify_waiters();
+            self.work_notify.notify_waiters();
+            return;
+        }
+        self.shutdown_notify.notify_waiters();
         self.work_notify.notify_waiters();
         {
             let mut pm = self.proxies.lock().await;
