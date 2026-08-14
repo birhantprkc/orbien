@@ -9,6 +9,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
+const RECONNECT_BASE_SECS: u64 = 1;
+const RECONNECT_MAX_SECS: u64 = 60;
+
 pub struct Service {
     cfg: ClientConfig,
     config_path: PathBuf,
@@ -36,6 +39,7 @@ impl Service {
         }
 
         let mut first_attempt = true;
+        let mut backoff_secs = RECONNECT_BASE_SECS;
         loop {
             if cancel.is_cancelled() {
                 tracing::info!("client service cancelled");
@@ -87,6 +91,7 @@ impl Service {
                     run_id = rid;
                     on_log("WARN  disconnected from server".into());
                     on_status(ClientStatus::Reconnecting);
+                    backoff_secs = RECONNECT_BASE_SECS;
                 }
                 Err(e) => {
                     if cancel.is_cancelled() {
@@ -99,15 +104,21 @@ impl Service {
             }
 
             first_attempt = false;
-            on_log("INFO  retrying in 3s".into());
+            let delay = backoff_secs;
+            on_log(format!("INFO  retrying in {delay}s"));
+            tracing::info!(delay_secs = delay, "reconnect backoff");
 
             tokio::select! {
                 _ = cancel.cancelled() => {
                     tracing::info!("client service cancelled during backoff");
                     return Ok(());
                 }
-                _ = sleep(Duration::from_secs(3)) => {}
+                _ = sleep(Duration::from_secs(delay)) => {}
             }
+
+            backoff_secs = backoff_secs
+                .saturating_mul(2)
+                .clamp(RECONNECT_BASE_SECS, RECONNECT_MAX_SECS);
         }
     }
 }
