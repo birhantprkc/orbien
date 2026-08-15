@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-2.1.0--SNAPSHOT-blue?style=for-the-badge" alt="orbien:2.1.0-SNAPSHOT"/>
+    <img src="https://img.shields.io/badge/orbien-3.0.0-blue?style=for-the-badge" alt="orbien:3.0.0"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -45,7 +45,7 @@ A lightweight, high-performance, and secure intranet penetration tool with a bin
 ## Features
 
 - **High performance**: end-to-end zero-copy forwarding, low latency, high throughput, no GC pauses, and low memory usage
-- **Proxy protocols**: TCP, UDP, HTTP, HTTPS, and more
+- **Tunnel protocols**: TCP, UDP, HTTP, HTTPS, and more
 - **Transport protocols**: TCP, KCP, WebSocket, QUIC, with TCP multiplexing support
 - **Security**: Token-based tunnel authentication, TLS and mTLS encryption; HTTPS supports transparent forwarding and client-side TLS termination
 - **Cross-platform**: Windows, Linux, macOS, FreeBSD, and more
@@ -59,8 +59,7 @@ A lightweight, high-performance, and secure intranet penetration tool with a bin
 
 ```toml
 # orbien-server.toml
-bindAddr = "0.0.0.0"
-bindPort = 9527
+listen = "0.0.0.0:9527"
 ```
 
 ```shell
@@ -71,31 +70,25 @@ bindPort = 9527
 
 ```toml
 # orbien.toml
-serverAddr = "127.0.0.1"
-serverPort = 9527
+server = "127.0.0.1:9527"
 
-[[proxies]]
+[[tunnels]]
 name = "mysql"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 3306
-remotePort = 6050
+protocol = "tcp"
+service = "127.0.0.1:3306"
+remotePort = 9000
 ```
 
 ```shell
 ./orbien -c orbien.toml
 ```
 
-If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) desktop client — built with `Tauri`, under `10MB`.
+If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) desktop native GUI client.
 
 ![desktop_en.gif](doc/img/desktop_en.gif)
 
 # Benchmark
 
-The chart below shows results from local loopback tests. Orbien keeps memory usage very low and stable.
+The chart below shows local loopback memory usage. Compared with `frp`, Orbien uses less memory and stays more stable. 
 
 ![mem.png](doc/img/mem.png)
-
-# Acknowledgements
-
-This project draws architectural inspiration from [frp](https://github.com/fatedier/frp). The desktop client's UI layout is inspired by [frpc-desktop](https://github.com/luckjiawei/frpc-desktop). Thanks to the open-source community.

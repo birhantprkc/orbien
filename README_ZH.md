@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-2.1.0--SNAPSHOT-blue?style=for-the-badge" alt="orbien:2.1.0-SNAPSHOT"/>
+    <img src="https://img.shields.io/badge/orbien-3.0.0-blue?style=for-the-badge" alt="orbien:3.0.0"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -44,12 +44,12 @@
 
 ## 功能特性
 
-- **高性能**：全链路零拷贝转发，低延迟、高吞吐、无GC停顿、内存占用低
-- **代理协议**：支持 TCP、UDP、HTTP、HTTPS等多种协议代理
+- **高性能**：高性能，抗丢包、高吞吐、无GC停顿、内存占用低
+- **隧道协议**：支持 TCP、UDP、HTTP、HTTPS 等多种协议隧道
 - **传输协议**：支持 TCP、KCP、WebSocket、QUIC，支持TCP多路复用
 - **安全加密**：支持 Token 隧道鉴权以及Tls和mTLS加密传输；HTTPS采用透明转发和客户端TLS终止
 - **多平台支持**：支持 Windows、Linux、macOS、freeBSD 等多平台
-- **运维管理**：提供轻量Web管理界面和跨平台桌面客户端，便于配置和监控
+- **运维管理**：提供轻量Web管理界面和跨平台原生桌面客户端，便于配置和监控
 
 ## 快速开始
 
@@ -59,8 +59,7 @@
 
 ```toml
 # orbien-server.toml
-bindAddr = "0.0.0.0"
-bindPort = 9527
+listen = "0.0.0.0:9527"
 ```
 
 ```shell
@@ -71,33 +70,25 @@ bindPort = 9527
 
 ```toml
 # orbien.toml
-serverAddr = "127.0.0.1"
-serverPort = 9527
+server = "127.0.0.1:9527"
 
-[[proxies]]
+[[tunnels]]
 name = "mysql"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 3306
-remotePort = 6050
+protocol = "tcp"
+service = "127.0.0.1:3306"
+remotePort = 9000
 ```
 
 ```shell
 ./orbien -c orbien.toml
 ```
 
-如果觉得命令行CLI操作麻烦，可以使用 [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) 桌面端，该桌面端基于
-`Tauri`框架开发，体积不到`10MB`
+如果觉得命令行 CLI 操作麻烦，可以使用 [Orbien-Desktop](https://github.com/orbien-org/orbien/releases) 桌面客户端。
 
-![desktop.gif](doc/img/desktop.gif)
+![desktop_zh.gif](doc/img/desktop_zh.gif)
 
 # 性能测试
 
-下图是基于本地回环进行的测试结果，可以发现`Orbien`的内存占用非常低且稳定。
+下图是基于本地回环的内存占用测试结果。相较于`frp`，`Orbien`的内存占用更低且更稳定:
 
 ![mem.png](doc/img/mem.png)
-
-# 致谢
-
-本项目参考了[frp](https://github.com/fatedier/frp)
-的架构思路，桌面客户端UI布局借鉴[frpc-desktop](https://github.com/luckjiawei/frpc-desktop)的交互，感谢开源社区的贡献。
