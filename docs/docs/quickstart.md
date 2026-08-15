@@ -11,8 +11,7 @@ title: 快速开始
 
 ```toml
 # orbien-server.toml
-bindAddr = "0.0.0.0"
-bindPort = 9527
+listen = "0.0.0.0:9527"
 ```
 
 ```shell
@@ -21,23 +20,19 @@ bindPort = 9527
 
 ## 客户端
 
-如果觉得命令行 CLI 操作麻烦，可以使用 [Orbien Desktop](download.mdx) 桌面端（不过内存占用比较大，内存受限时不建议使用）
+如果觉得命令行 CLI 操作麻烦，可以使用 [Orbien Desktop](download.mdx) 桌面客户端。
 
 ```toml
 # orbien.toml
-serverAddr = "127.0.0.1"
-serverPort = 9527
+server = "127.0.0.1:9527"
 
-[[proxies]]
+[[tunnels]]
 name = "mysql"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 3306
-remotePort = 6050
+protocol = "tcp"
+service = "127.0.0.1:3306"
+remotePort = 9000
 ```
 
 ```shell
 ./orbien -c orbien.toml
 ```
-
-
