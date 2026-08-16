@@ -1,12 +1,12 @@
 use super::udp::run_udp_session;
 use crate::plugin::{self, ConnectionInfo, Plugin, PluginContext};
 use anyhow::{anyhow, Result};
-use orbien_core::config::{ClientConfig, ProxyConfig};
+use orbien_core::config::{ClientConfig, TunnelConfig};
 use orbien_core::io;
-use orbien_core::limit::{self, maybe_limit, BandwidthLimitMode, BandwidthLimiter};
-use orbien_core::msg::StartWorkConn;
+use orbien_core::limit::{self, maybe_limit, BandwidthLimitSide, BandwidthLimiter};
+use orbien_core::msg::StartDataConn;
 use orbien_core::net::{
-    addrs_from_start_work, build_proxy_protocol_header, parse_proxy_protocol_version,
+    addrs_from_start_data_conn, build_proxy_protocol_header, parse_proxy_protocol_version,
 };
 use orbien_core::transport::DynStream;
 use std::collections::HashMap;
@@ -15,41 +15,42 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::sync::{oneshot, Mutex};
 
-struct ProxyEntry {
-    cfg: ProxyConfig,
+struct TunnelEntry {
+    cfg: TunnelConfig,
     limiter: Option<Arc<BandwidthLimiter>>,
     plugin: Option<Arc<dyn Plugin>>,
     proxy_protocol: Option<&'static str>,
     udp_cancel: Mutex<Option<oneshot::Sender<()>>>,
 }
 
-pub struct ProxyManager {
-    by_name: HashMap<String, ProxyEntry>,
+pub struct TunnelManager {
+    by_name: HashMap<String, TunnelEntry>,
     udp_packet_size: usize,
 }
 
-impl ProxyManager {
+impl TunnelManager {
     pub fn from_config(cfg: &ClientConfig) -> Result<Self> {
         let mut by_name = HashMap::new();
-        for p in &cfg.proxies {
-            let limiter = limit::limiter_if_mode(
-                &p.transport.bandwidth_limit,
-                &p.transport.bandwidth_limit_mode,
-                BandwidthLimitMode::Client,
+        for p in &cfg.tunnels {
+            let limiter = limit::limiter_if_side(
+                p.transport.bandwidth,
+                &p.transport.bandwidth_limit_side,
+                BandwidthLimitSide::Client,
             )
             .unwrap_or_else(|e| {
                 tracing::warn!(
-                    proxy = %p.name,
+                    tunnel = %p.name,
                     error = %e,
-                    "invalid bandwidthLimit; ignoring"
+                    "invalid bandwidth; ignoring"
                 );
                 None
             });
             if let Some(ref l) = limiter {
                 tracing::info!(
-                    proxy = %p.name,
+                    tunnel = %p.name,
+                    mbps = p.transport.bandwidth,
                     bytes_per_sec = l.bytes_per_sec(),
-                    mode = "client",
+                    side = "client",
                     "bandwidth limit enabled"
                 );
             }
@@ -58,13 +59,7 @@ impl ProxyManager {
                 if pc.plugin_type.is_empty() {
                     None
                 } else {
-                    let cn = p.custom_domains.first().cloned().unwrap_or_else(|| {
-                        if p.subdomain.is_empty() {
-                            "localhost".into()
-                        } else {
-                            p.subdomain.clone()
-                        }
-                    });
+                    let cn = pick_cert_common_name(&p.domains, &p.name);
                     let ctx = PluginContext {
                         name: p.name.clone(),
                         cert_common_name: cn,
@@ -78,15 +73,15 @@ impl ProxyManager {
             let proxy_protocol = parse_proxy_protocol_version(&p.transport.proxy_protocol_version)?;
             if let Some(ver) = proxy_protocol {
                 tracing::info!(
-                    proxy = %p.name,
+                    tunnel = %p.name,
                     version = ver,
-                    "proxy protocol enabled (client writes PP to local)"
+                    "PROXY Protocol enabled (client writes header to local)"
                 );
             }
 
             by_name.insert(
                 p.name.clone(),
-                ProxyEntry {
+                TunnelEntry {
                     cfg: p.clone(),
                     limiter,
                     plugin,
@@ -101,40 +96,40 @@ impl ProxyManager {
         })
     }
 
-    pub async fn handle_work_conn(&self, start: &StartWorkConn, work: DynStream) -> Result<()> {
+    pub async fn handle_data_conn(&self, start: &StartDataConn, data: DynStream) -> Result<()> {
         let entry = self
             .by_name
-            .get(&start.proxy_name)
-            .ok_or_else(|| anyhow!("unknown proxy: {}", start.proxy_name))?;
+            .get(&start.tunnel_name)
+            .ok_or_else(|| anyhow!("unknown tunnel: {}", start.tunnel_name))?;
 
-        match entry.cfg.proxy_type.as_str() {
-            "udp" => self.handle_udp(entry, work).await,
-            "tcp" | "http" | "https" => self.handle_stream_proxy(entry, start, work).await,
+        match entry.cfg.protocol.as_str() {
+            "udp" => self.handle_udp(entry, data).await,
+            "tcp" | "http" | "https" => self.handle_stream(entry, start, data).await,
             other => Err(anyhow!(
-                "unsupported proxy type on work conn: {} ({})",
+                "unsupported tunnel protocol on data conn: {} ({})",
                 other,
                 entry.cfg.name
             )),
         }
     }
 
-    async fn handle_stream_proxy(
+    async fn handle_stream(
         &self,
-        entry: &ProxyEntry,
-        start: &StartWorkConn,
-        work: DynStream,
+        entry: &TunnelEntry,
+        start: &StartDataConn,
+        data: DynStream,
     ) -> Result<()> {
-        let work = maybe_limit(work, entry.limiter.clone());
+        let data = maybe_limit(data, entry.limiter.clone());
 
         if let Some(ref plugin) = entry.plugin {
             tracing::debug!(
-                proxy = %entry.cfg.name,
+                tunnel = %entry.cfg.name,
                 plugin = plugin.name(),
                 "handle by plugin"
             );
             return plugin
                 .handle(ConnectionInfo {
-                    stream: work,
+                    stream: data,
                     src_addr: start.src_addr.clone(),
                     src_port: start.src_port,
                     dst_addr: start.dst_addr.clone(),
@@ -143,56 +138,70 @@ impl ProxyManager {
                 .await;
         }
 
-        let local_addr = format!("{}:{}", entry.cfg.local_ip, entry.cfg.local_port);
-        let mut local = TcpStream::connect(&local_addr).await.map_err(|e| {
+        let (svc_host, svc_port) = entry.cfg.service_host_port()?;
+        let local_addr = entry.cfg.service.trim().to_string();
+        if local_addr.is_empty() || svc_port == 0 {
+            return Err(anyhow!(
+                "tunnel {} has empty/invalid service (local backend)",
+                entry.cfg.name
+            ));
+        }
+        let local = TcpStream::connect(&local_addr).await.map_err(|e| {
             anyhow!(
-                "dial local {} for proxy {}: {}",
+                "dial local {} for tunnel {}: {}",
                 local_addr,
                 entry.cfg.name,
                 e
             )
         })?;
+        orbien_core::net::enable_nodelay(&local);
+        let mut local = local;
 
         if let Some(ver) = entry.proxy_protocol {
-            if let Some((src, dst)) = addrs_from_start_work(
+            if let Some((src, dst)) = addrs_from_start_data_conn(
                 &start.src_addr,
                 start.src_port,
                 &start.dst_addr,
                 start.dst_port,
-                entry.cfg.local_port,
+                svc_port,
             ) {
                 let hdr = build_proxy_protocol_header(src, dst, ver)?;
                 local.write_all(&hdr).await?;
                 tracing::debug!(
-                    proxy = %entry.cfg.name,
+                    tunnel = %entry.cfg.name,
                     version = ver,
                     %src,
                     %dst,
-                    "wrote proxy protocol header to local"
+                    "wrote PROXY Protocol header to local"
                 );
             } else {
                 tracing::debug!(
-                    proxy = %entry.cfg.name,
-                    "proxy protocol configured but StartWorkConn src empty; skip"
+                    tunnel = %entry.cfg.name,
+                    "PROXY Protocol configured but StartDataConn src empty; skip"
                 );
             }
         }
 
         tracing::debug!(
-            proxy = %entry.cfg.name,
+            tunnel = %entry.cfg.name,
             %local_addr,
+            host = %svc_host,
             limited = entry.limiter.is_some(),
-            "joining work <-> local"
+            "joining data <-> local"
         );
-        let _ = io::join(work, local).await;
+        if let Err(e) = io::join(data, local).await {
+            tracing::debug!(error = %e, "join ended");
+        }
         Ok(())
     }
 
-    async fn handle_udp(&self, entry: &ProxyEntry, work: DynStream) -> Result<()> {
-        let local_addr: std::net::SocketAddr =
-            format!("{}:{}", entry.cfg.local_ip, entry.cfg.local_port)
-                .parse()
-                .map_err(|e| anyhow!("invalid local udp addr: {e}"))?;
+    async fn handle_udp(&self, entry: &TunnelEntry, data: DynStream) -> Result<()> {
+        let local_addr: std::net::SocketAddr = entry
+            .cfg
+            .service
+            .trim()
+            .parse()
+            .map_err(|e| anyhow!("invalid local udp service {}: {e}", entry.cfg.service))?;
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
         {
@@ -204,15 +213,15 @@ impl ProxyManager {
         }
 
         tracing::info!(
-            proxy = %entry.cfg.name,
+            tunnel = %entry.cfg.name,
             %local_addr,
-            "udp work conn; starting forwarder"
+            "udp data conn; starting forwarder"
         );
 
-        let work = maybe_limit(work, entry.limiter.clone());
+        let data = maybe_limit(data, entry.limiter.clone());
 
         run_udp_session(
-            work,
+            data,
             local_addr,
             self.udp_packet_size,
             entry.proxy_protocol.map(|s| s.to_string()),
@@ -220,4 +229,22 @@ impl ProxyManager {
         )
         .await
     }
+}
+fn pick_cert_common_name(domains: &[String], tunnel_name: &str) -> String {
+    for d in domains {
+        let d = d.trim();
+        if d.is_empty() {
+            continue;
+        }
+        if d.contains('.') && !d.contains('*') {
+            return d.to_ascii_lowercase();
+        }
+    }
+    for d in domains {
+        let d = d.trim();
+        if !d.is_empty() {
+            return d.to_ascii_lowercase();
+        }
+    }
+    tunnel_name.trim().to_ascii_lowercase()
 }

@@ -8,18 +8,18 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsAcceptor;
 
-pub struct Https2HttpPlugin {
+pub struct TlsTermPlugin {
     local_addr: String,
     host_header_rewrite: String,
     request_headers: Vec<(String, String)>,
     acceptor: TlsAcceptor,
 }
 
-impl Https2HttpPlugin {
+impl TlsTermPlugin {
     pub fn new(ctx: PluginContext, cfg: &PluginConfig) -> Result<Self> {
-        let local_addr = cfg.local_addr.trim().to_string();
+        let local_addr = cfg.service.trim().to_string();
         if local_addr.is_empty() {
-            bail!("https2http requires plugin.localAddr (e.g. \"127.0.0.1:80\")");
+            bail!("tls-term requires plugin.service (e.g. \"127.0.0.1:80\")");
         }
 
         let cn = if ctx.cert_common_name.is_empty() {
@@ -27,7 +27,7 @@ impl Https2HttpPlugin {
         } else {
             ctx.cert_common_name.clone()
         };
-        let tls_cfg = load_or_generate_https_server_config(&cfg.crt_path, &cfg.key_path, &cn)?;
+        let tls_cfg = load_or_generate_https_server_config(&cfg.cert_file, &cfg.key_file, &cn)?;
         let acceptor = TlsAcceptor::from(tls_cfg);
 
         let request_headers: Vec<(String, String)> = cfg
@@ -38,10 +38,10 @@ impl Https2HttpPlugin {
             .collect();
 
         tracing::info!(
-            proxy = %ctx.name,
+            tunnel = %ctx.name,
             %local_addr,
             rewrite = %cfg.host_header_rewrite,
-            "plugin https2http ready (TLS terminates on agent)"
+            "plugin tls-term ready (TLS terminates on agent)"
         );
 
         Ok(Self {
@@ -54,9 +54,9 @@ impl Https2HttpPlugin {
 }
 
 #[async_trait]
-impl Plugin for Https2HttpPlugin {
+impl Plugin for TlsTermPlugin {
     fn name(&self) -> &str {
-        "https2http"
+        "tls-term"
     }
 
     async fn handle(&self, conn: ConnectionInfo) -> Result<()> {
@@ -64,11 +64,12 @@ impl Plugin for Https2HttpPlugin {
             .acceptor
             .accept(conn.stream)
             .await
-            .map_err(|e| anyhow!("https2http TLS accept failed: {e}"))?;
+            .map_err(|e| anyhow!("tls-term TLS accept failed: {e}"))?;
 
         let mut local = TcpStream::connect(&self.local_addr)
             .await
-            .map_err(|e| anyhow!("https2http dial {}: {e}", self.local_addr))?;
+            .map_err(|e| anyhow!("tls-term dial {}: {e}", self.local_addr))?;
+        orbien_core::net::enable_nodelay(&local);
 
         let (mut tls_r, mut tls_w) = tokio::io::split(tls);
         let mut head = read_http_request_head(&mut tls_r).await?;
@@ -80,7 +81,7 @@ impl Plugin for Https2HttpPlugin {
         tracing::debug!(
             local = %self.local_addr,
             src = %format!("{}:{}", conn.src_addr, conn.src_port),
-            "https2http joining decrypted <-> local HTTP"
+            "tls-term joining decrypted <-> local HTTP"
         );
 
         let (mut local_r, mut local_w) = tokio::io::split(local);

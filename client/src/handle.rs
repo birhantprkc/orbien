@@ -26,7 +26,7 @@ impl ClientStatus {
 }
 
 #[derive(Debug, Default)]
-struct ProxyRemoteState {
+struct TunnelRemoteState {
     gen: u64,
     by_name: HashMap<String, String>,
 }
@@ -35,7 +35,7 @@ struct Inner {
     status: Mutex<ClientStatus>,
     last_error: Mutex<Option<String>>,
     pending_logs: Mutex<Vec<String>>,
-    proxy_remotes: Mutex<ProxyRemoteState>,
+    tunnel_remotes: Mutex<TunnelRemoteState>,
     cancel: Mutex<Option<CancellationToken>>,
     join: Mutex<Option<JoinHandle<()>>>,
 }
@@ -58,7 +58,7 @@ impl ClientHandle {
                 status: Mutex::new(ClientStatus::Stopped),
                 last_error: Mutex::new(None),
                 pending_logs: Mutex::new(Vec::new()),
-                proxy_remotes: Mutex::new(ProxyRemoteState::default()),
+                tunnel_remotes: Mutex::new(TunnelRemoteState::default()),
                 cancel: Mutex::new(None),
                 join: Mutex::new(None),
             }),
@@ -91,13 +91,13 @@ impl ClientHandle {
         )
     }
 
-    pub fn proxy_remotes_if_changed(
+    pub fn tunnel_remotes_if_changed(
         &self,
         since_gen: u64,
     ) -> Option<(u64, HashMap<String, String>)> {
         let g = self
             .inner
-            .proxy_remotes
+            .tunnel_remotes
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         if g.gen == since_gen {
@@ -106,23 +106,23 @@ impl ClientHandle {
         Some((g.gen, g.by_name.clone()))
     }
 
-    pub fn clear_proxy_remotes(&self) {
+    pub fn clear_tunnel_remotes(&self) {
         let mut g = self
             .inner
-            .proxy_remotes
+            .tunnel_remotes
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         g.by_name.clear();
         g.gen = g.gen.wrapping_add(1);
     }
 
-    fn set_proxy_remote(&self, name: String, remote_addr: String) {
+    fn set_tunnel_remote(&self, name: String, remote_addr: String) {
         if name.is_empty() {
             return;
         }
         let mut g = self
             .inner
-            .proxy_remotes
+            .tunnel_remotes
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         if g.by_name.get(&name) == Some(&remote_addr) {
@@ -155,11 +155,13 @@ impl ClientHandle {
         }
     }
 
-    pub async fn run_foreground(self, cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
+    pub async fn run_foreground(self, mut cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
+        cfg.prepare_runtime(&config_path);
+        cfg.validate()?;
         let cancel = CancellationToken::new();
         self.set_status(ClientStatus::Starting);
         self.set_error(None);
-        self.clear_proxy_remotes();
+        self.clear_tunnel_remotes();
         let result = Service::new(cfg, config_path)
             .run(
                 cancel.clone(),
@@ -175,15 +177,15 @@ impl ClientHandle {
                 },
                 {
                     let h = self.clone();
-                    Arc::new(move |name, remote| h.set_proxy_remote(name, remote))
+                    Arc::new(move |name, remote| h.set_tunnel_remote(name, remote))
                 },
                 {
                     let h = self.clone();
-                    Arc::new(move || h.clear_proxy_remotes())
+                    Arc::new(move || h.clear_tunnel_remotes())
                 },
             )
             .await;
-        self.clear_proxy_remotes();
+        self.clear_tunnel_remotes();
         self.set_status(ClientStatus::Stopped);
         if let Err(ref e) = result {
             self.set_error(Some(e.to_string()));
@@ -191,15 +193,17 @@ impl ClientHandle {
         result
     }
 
-    pub fn start(&self, cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
+    pub fn start(&self, mut cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
         if self.status().is_active() {
             bail!("client already running");
         }
+        cfg.prepare_runtime(&config_path);
+        cfg.validate()?;
         let cancel = CancellationToken::new();
         *self.inner.cancel.lock().unwrap_or_else(|e| e.into_inner()) = Some(cancel.clone());
         self.set_status(ClientStatus::Starting);
         self.set_error(None);
-        self.clear_proxy_remotes();
+        self.clear_tunnel_remotes();
 
         let handle = self.clone();
         let join = tokio::spawn(async move {
@@ -213,22 +217,28 @@ impl ClientHandle {
                     h.enqueue_log(line);
                 }
             };
-            let on_proxy_remote: Arc<dyn Fn(String, String) + Send + Sync> = {
+            let on_tunnel_remote: Arc<dyn Fn(String, String) + Send + Sync> = {
                 let h = handle.clone();
-                Arc::new(move |name: String, remote: String| h.set_proxy_remote(name, remote))
+                Arc::new(move |name: String, remote: String| h.set_tunnel_remote(name, remote))
             };
             let on_remotes_clear: Arc<dyn Fn() + Send + Sync> = {
                 let h = handle.clone();
-                Arc::new(move || h.clear_proxy_remotes())
+                Arc::new(move || h.clear_tunnel_remotes())
             };
             let result = Service::new(cfg, config_path)
-                .run(cancel, on_status, on_log, on_proxy_remote, on_remotes_clear)
+                .run(
+                    cancel,
+                    on_status,
+                    on_log,
+                    on_tunnel_remote,
+                    on_remotes_clear,
+                )
                 .await;
             if let Err(e) = result {
                 tracing::error!(error = %e, "client service ended with error");
                 handle.set_error(Some(e.to_string()));
             }
-            handle.clear_proxy_remotes();
+            handle.clear_tunnel_remotes();
             handle.set_status(ClientStatus::Stopped);
             *handle
                 .inner
@@ -274,6 +284,6 @@ impl ClientHandle {
         } else {
             self.set_status(ClientStatus::Stopped);
         }
-        self.clear_proxy_remotes();
+        self.clear_tunnel_remotes();
     }
 }

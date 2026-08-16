@@ -1,51 +1,53 @@
 use crate::connector::{build_connector, Connector};
-use crate::proxy::ProxyManager;
-use crate::run_id;
+use crate::session_id;
+use crate::tunnel::TunnelManager;
 use anyhow::{anyhow, Result};
 use orbien_core::auth;
 use orbien_core::config::ClientConfig;
-use orbien_core::msg::{self, Login, Message, NewProxy, NewWorkConn, Ping};
+use orbien_core::msg::{self, Login, Message, NewDataConn, NewTunnel, Ping};
 use orbien_core::transport::DynStream;
 use orbien_core::VERSION;
 use std::path::Path;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
-use tokio::time::interval;
+use tokio::time::{interval, sleep};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub enum SessionEnd {
-    Disconnected { run_id: String },
-    Kicked { run_id: String, reason: String },
+    Disconnected { session_id: String },
+    Kicked { session_id: String, reason: String },
 }
 
 type CtrlRead = ReadHalf<DynStream>;
 type CtrlWrite = WriteHalf<DynStream>;
-type OnProxyRemote = Arc<dyn Fn(String, String) + Send + Sync>;
+type OnTunnelRemote = Arc<dyn Fn(String, String) + Send + Sync>;
 
 pub struct Control {
     cfg: ClientConfig,
-    run_id: String,
+    session_id: String,
     reader: Mutex<CtrlRead>,
     writer: Mutex<CtrlWrite>,
-    proxies: ProxyManager,
+    tunnels: TunnelManager,
     connector: Arc<dyn Connector>,
     cancel: CancellationToken,
-    work_tasks: Mutex<JoinSet<()>>,
-    on_proxy_remote: OnProxyRemote,
+    data_tasks: Mutex<JoinSet<()>>,
+    on_tunnel_remote: OnTunnelRemote,
+    last_pong_unix: AtomicI64,
 }
 
 impl Control {
     pub async fn start(
         cfg: &ClientConfig,
-        previous_run_id: String,
+        previous_session_id: String,
         config_path: &Path,
         parent_cancel: CancellationToken,
         on_connected: impl FnOnce(),
-        on_proxy_remote: OnProxyRemote,
+        on_tunnel_remote: OnTunnelRemote,
     ) -> Result<SessionEnd> {
         let session_cancel = parent_cancel.child_token();
         let connector = build_connector(cfg).await?;
@@ -58,16 +60,16 @@ impl Control {
         );
 
         let timestamp = now_secs();
-        let privilege_key = auth::get_auth_key(&cfg.auth.token, timestamp);
+        let auth_digest = auth::compute_auth_digest(&cfg.auth.token, timestamp);
         let login = Login {
             version: VERSION.into(),
             hostname: hostname(),
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
             user: cfg.user.clone(),
-            privilege_key,
+            auth_digest,
             timestamp,
-            run_id: previous_run_id,
+            session_id: previous_session_id,
             pool_count: cfg.transport.pool_count,
         };
         tracing::info!(
@@ -93,25 +95,26 @@ impl Control {
             return Err(anyhow!("login failed: {}", resp.error));
         }
 
-        tracing::info!(run_id = %resp.run_id, "login ok");
-        if let Err(e) = run_id::save(config_path, &resp.run_id) {
-            tracing::warn!(error = %e, "failed to persist run_id");
+        tracing::info!(session_id = %resp.session_id, "login ok");
+        if let Err(e) = session_id::save(config_path, &resp.session_id) {
+            tracing::warn!(error = %e, "failed to persist session_id");
         }
 
         let (reader, writer) = tokio::io::split(stream);
         let ctl = Arc::new(Control {
             cfg: cfg.clone(),
-            run_id: resp.run_id.clone(),
+            session_id: resp.session_id.clone(),
             reader: Mutex::new(reader),
             writer: Mutex::new(writer),
-            proxies: ProxyManager::from_config(cfg)?,
+            tunnels: TunnelManager::from_config(cfg)?,
             connector,
             cancel: session_cancel.clone(),
-            work_tasks: Mutex::new(JoinSet::new()),
-            on_proxy_remote,
+            data_tasks: Mutex::new(JoinSet::new()),
+            on_tunnel_remote,
+            last_pong_unix: AtomicI64::new(now_secs()),
         });
 
-        ctl.register_all_proxies().await?;
+        ctl.register_all_tunnels().await?;
         on_connected();
 
         let hb = Arc::clone(&ctl);
@@ -123,18 +126,29 @@ impl Control {
             }
         });
 
+        let to = Arc::clone(&ctl);
+        let to_cancel = session_cancel.clone();
+        let timeout_watch = tokio::spawn(async move {
+            tokio::select! {
+                _ = to_cancel.cancelled() => {}
+                _ = to.heartbeat_timeout_loop() => {}
+            }
+        });
+
         let result = ctl.clone().reader_loop().await;
         ctl.shutdown().await;
         heartbeat.abort();
+        timeout_watch.abort();
         let _ = heartbeat.await;
+        let _ = timeout_watch.await;
 
         match result {
             Ok(ReaderEnd::Kicked(reason)) => Ok(SessionEnd::Kicked {
-                run_id: resp.run_id,
+                session_id: resp.session_id,
                 reason,
             }),
             Ok(ReaderEnd::Closed) => Ok(SessionEnd::Disconnected {
-                run_id: resp.run_id,
+                session_id: resp.session_id,
             }),
             Err(e) => Err(e),
         }
@@ -146,96 +160,104 @@ impl Control {
             let mut writer = self.writer.lock().await;
             let _ = writer.shutdown().await;
         }
-        let mut tasks = self.work_tasks.lock().await;
+        let mut tasks = self.data_tasks.lock().await;
         tasks.abort_all();
         while tasks.join_next().await.is_some() {}
     }
 
-    async fn register_all_proxies(&self) -> Result<()> {
-        for p in &self.cfg.proxies {
-            let msg = match p.proxy_type.as_str() {
-                "tcp" => Message::NewProxy(new_proxy_base(
+    async fn register_all_tunnels(&self) -> Result<()> {
+        for p in &self.cfg.tunnels {
+            let (local_ip, local_port) = p.service_host_port()?;
+            if p.requires_local_service() && local_port == 0 {
+                return Err(anyhow!(
+                    "tunnel `{}` requires service = \"host:port\" (local backend)",
+                    p.name
+                ));
+            }
+            if p.remote_port == 0 && matches!(p.protocol.as_str(), "tcp" | "udp") {
+                return Err(anyhow!(
+                    "tunnel `{}` type {} requires remotePort > 0",
+                    p.name,
+                    p.protocol
+                ));
+            }
+            let msg = match p.protocol.as_str() {
+                "tcp" => Message::NewTunnel(new_tunnel_base(
                     &p.name,
                     "tcp",
                     p.remote_port as i32,
-                    &p.local_ip,
-                    p.local_port,
-                    &p.transport,
-                    |np| {
-                        np.custom_domains = Vec::new();
-                    },
-                )),
-                "udp" => Message::NewProxy(new_proxy_base(
-                    &p.name,
-                    "udp",
-                    p.remote_port as i32,
-                    &p.local_ip,
-                    p.local_port,
+                    &local_ip,
+                    local_port,
                     &p.transport,
                     |_| {},
                 )),
-                "http" => Message::NewProxy(new_proxy_base(
+                "udp" => Message::NewTunnel(new_tunnel_base(
+                    &p.name,
+                    "udp",
+                    p.remote_port as i32,
+                    &local_ip,
+                    local_port,
+                    &p.transport,
+                    |_| {},
+                )),
+                "http" => Message::NewTunnel(new_tunnel_base(
                     &p.name,
                     "http",
                     0,
-                    &p.local_ip,
-                    p.local_port,
+                    &local_ip,
+                    local_port,
                     &p.transport,
                     |np| {
-                        np.custom_domains = p.custom_domains.clone();
-                        np.subdomain = p.subdomain.clone();
+                        np.domains = p.domains.clone();
                         np.locations = p.locations.clone();
-                        np.http_user = p.http_user.clone();
-                        np.http_pwd = p.http_password.clone();
+                        np.basic_auth_user = p.basic_auth_user.clone();
+                        np.basic_auth_password = p.basic_auth_password.clone();
                         np.host_header_rewrite = p.host_header_rewrite.clone();
                         np.route_by_http_user = p.route_by_http_user.clone();
                     },
                 )),
-                "https" => Message::NewProxy(new_proxy_base(
+                "https" => Message::NewTunnel(new_tunnel_base(
                     &p.name,
                     "https",
                     0,
-                    &p.local_ip,
-                    p.local_port,
+                    &local_ip,
+                    local_port,
                     &p.transport,
                     |np| {
-                        np.custom_domains = p.custom_domains.clone();
-                        np.subdomain = p.subdomain.clone();
+                        np.domains = p.domains.clone();
                     },
                 )),
                 other => {
-                    tracing::warn!(name = %p.name, ty = %other, "skip unsupported proxy type");
+                    tracing::warn!(name = %p.name, protocol = %other, "skip unsupported tunnel protocol");
                     continue;
                 }
             };
             let mut writer = self.writer.lock().await;
             msg::write_msg(&mut *writer, &msg).await?;
-            match p.proxy_type.as_str() {
+            match p.protocol.as_str() {
                 "tcp" => tracing::info!(
                     name = %p.name,
-                    local = %format!("{}:{}", p.local_ip, p.local_port),
+                    service = %p.service,
                     remote_port = p.remote_port,
-                    "sent NewProxy"
+                    "sent NewTunnel"
                 ),
                 "udp" => tracing::info!(
                     name = %p.name,
-                    local = %format!("{}:{}", p.local_ip, p.local_port),
+                    service = %p.service,
                     remote_port = p.remote_port,
-                    "sent NewProxy udp"
+                    "sent NewTunnel udp"
                 ),
                 "http" => tracing::info!(
                     name = %p.name,
-                    local = %format!("{}:{}", p.local_ip, p.local_port),
-                    domains = ?p.custom_domains,
-                    subdomain = %p.subdomain,
-                    "sent NewProxy http"
+                    service = %p.service,
+                    domains = ?p.domains,
+                    "sent NewTunnel http"
                 ),
                 "https" => tracing::info!(
                     name = %p.name,
-                    local = %format!("{}:{}", p.local_ip, p.local_port),
-                    domains = ?p.custom_domains,
-                    subdomain = %p.subdomain,
-                    "sent NewProxy https (SNI passthrough)"
+                    service = %p.service,
+                    domains = ?p.domains,
+                    "sent NewTunnel https"
                 ),
                 _ => {}
             }
@@ -269,41 +291,39 @@ impl Control {
                     tracing::warn!(reason = %k.reason, "kicked by server — will exit");
                     return Ok(ReaderEnd::Kicked(k.reason));
                 }
-                Message::ReqWorkConn(_) => {
+                Message::ReqDataConn(_) => {
                     let ctl = Arc::clone(&self);
                     let cancel = self.cancel.clone();
-                    self.work_tasks.lock().await.spawn(async move {
+                    self.data_tasks.lock().await.spawn(async move {
                         tokio::select! {
                             _ = cancel.cancelled() => {}
-                            res = ctl.handle_req_work_conn() => {
+                            res = ctl.handle_req_data_conn() => {
                                 if let Err(e) = res {
-                                    tracing::error!(error = %e, "work tunnel failed");
+                                    tracing::error!(error = %e, "data conn failed");
                                 }
                             }
                         }
                     });
                 }
-                Message::NewProxyResp(resp) => {
+                Message::NewTunnelResp(resp) => {
                     if resp.error.is_empty() {
-                        let remote = normalize_remote_addr(
-                            &self.cfg.server_addr,
-                            &resp.remote_addr,
-                        );
+                        let remote = normalize_remote_addr(&self.cfg.server, &resp.remote_addr);
                         tracing::info!(
-                            name = %resp.proxy_name,
+                            name = %resp.tunnel_name,
                             remote = %remote,
-                            "proxy started"
+                            "tunnel started"
                         );
-                        (self.on_proxy_remote)(resp.proxy_name.clone(), remote);
+                        (self.on_tunnel_remote)(resp.tunnel_name.clone(), remote);
                     } else {
                         tracing::error!(
-                            name = %resp.proxy_name,
+                            name = %resp.tunnel_name,
                             error = %resp.error,
-                            "proxy start failed"
+                            "tunnel start failed"
                         );
                     }
                 }
                 Message::Pong(_) => {
+                    self.last_pong_unix.store(now_secs(), Ordering::Relaxed);
                     tracing::trace!("pong");
                 }
                 other => {
@@ -314,9 +334,9 @@ impl Control {
     }
 
     async fn heartbeat_loop(self: Arc<Self>) {
-        let secs = self.cfg.transport.heartbeat_interval;
+        let secs = self.effective_ping_interval();
         if secs <= 0 {
-            tracing::debug!("app heartbeat disabled (tcpMux / heartbeatInterval<=0)");
+            tracing::debug!("app heartbeat disabled");
             std::future::pending::<()>().await;
             return;
         }
@@ -329,7 +349,7 @@ impl Control {
             tick.tick().await;
             let timestamp = now_secs();
             let ping = Ping {
-                privilege_key: auth::get_auth_key(&self.cfg.auth.token, timestamp),
+                auth_digest: auth::compute_auth_digest(&self.cfg.auth.token, timestamp),
                 timestamp,
             };
             let mut writer = self.writer.lock().await;
@@ -342,15 +362,64 @@ impl Control {
         }
     }
 
-    async fn handle_req_work_conn(self: Arc<Self>) -> Result<()> {
-        let mut work = self.connector.open().await?;
+    async fn heartbeat_timeout_loop(self: Arc<Self>) {
+        let timeout = self.effective_pong_timeout();
+        if timeout <= 0 {
+            std::future::pending::<()>().await;
+            return;
+        }
+        loop {
+            if self.cancel.is_cancelled() {
+                break;
+            }
+            sleep(Duration::from_secs(1)).await;
+            let last = self.last_pong_unix.load(Ordering::Relaxed);
+            let now = now_secs();
+            if last > 0 && now.saturating_sub(last) > timeout {
+                tracing::warn!(timeout_secs = timeout, "heartbeat timeout");
+                self.cancel.cancel();
+                break;
+            }
+        }
+    }
+
+    fn effective_ping_interval(&self) -> i64 {
+        let hb = self.cfg.transport.heartbeat_interval;
+        if hb > 0 {
+            return hb;
+        }
+        if self.cfg.transport.tcp_mux {
+            let mux_ka = self.cfg.transport.mux_keepalive_secs;
+            if mux_ka > 0 {
+                return mux_ka;
+            }
+        }
+        -1
+    }
+
+    fn effective_pong_timeout(&self) -> i64 {
+        let hb_to = self.cfg.transport.heartbeat_timeout;
+        if hb_to > 0 {
+            return hb_to;
+        }
+        if self.cfg.transport.heartbeat_interval <= 0 && self.cfg.transport.tcp_mux {
+            let mux_ka = self.cfg.transport.mux_keepalive_secs;
+            if mux_ka > 0 {
+                return mux_ka.saturating_mul(3);
+            }
+        }
+        -1
+    }
+
+    async fn handle_req_data_conn(self: Arc<Self>) -> Result<()> {
+        let mut data = self.connector.open().await?;
 
         let timestamp = now_secs();
         msg::write_msg(
-            &mut work,
-            &Message::NewWorkConn(NewWorkConn {
-                run_id: self.run_id.clone(),
-                privilege_key: auth::get_auth_key(&self.cfg.auth.token, timestamp),
+            &mut data,
+            &Message::NewDataConn(NewDataConn {
+                session_id: self.session_id.clone(),
+                auth_digest: auth::compute_auth_digest(&self.cfg.auth.token, timestamp),
                 timestamp,
             }),
         )
@@ -360,21 +429,21 @@ impl Control {
             _ = self.cancel.cancelled() => {
                 return Ok(());
             }
-            msg = msg::read_msg(&mut work) => {
+            msg = msg::read_msg(&mut data) => {
                 match msg? {
-                    Message::StartWorkConn(s) => s,
+                    Message::StartDataConn(s) => s,
                     other => {
-                        return Err(anyhow!("expected StartWorkConn, got {}", other.type_byte()))
+                        return Err(anyhow!("expected StartDataConn, got {}", other.type_byte()))
                     }
                 }
             }
         };
 
         if !start.error.is_empty() {
-            return Err(anyhow!("StartWorkConn error: {}", start.error));
+            return Err(anyhow!("StartDataConn error: {}", start.error));
         }
 
-        self.proxies.handle_work_conn(&start, work).await
+        self.tunnels.handle_data_conn(&start, data).await
     }
 }
 
@@ -406,8 +475,8 @@ fn hostname() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-fn omit_client_mode(mode: &str) -> String {
-    match mode.trim().to_ascii_lowercase().as_str() {
+fn omit_client_side(side: &str) -> String {
+    match side.trim().to_ascii_lowercase().as_str() {
         "" | "client" => String::new(),
         other => other.to_string(),
     }
@@ -420,6 +489,10 @@ fn normalize_remote_addr(server_addr: &str, remote_addr: &str) -> String {
     }
     if let Some(port) = remote.strip_prefix(':') {
         let host = server_addr.trim();
+        let host = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
+        if !host.is_empty() && !port.is_empty() && !host.contains(':') {
+            return format!("{host}:{port}");
+        }
         if !host.is_empty() && !port.is_empty() {
             return format!("{host}:{port}");
         }
@@ -427,32 +500,31 @@ fn normalize_remote_addr(server_addr: &str, remote_addr: &str) -> String {
     remote.to_string()
 }
 
-fn new_proxy_base(
+fn new_tunnel_base(
     name: &str,
-    proxy_type: &str,
+    protocol: &str,
     remote_port: i32,
     local_ip: &str,
     local_port: u16,
-    transport: &orbien_core::config::ProxyTransportConfig,
-    extra: impl FnOnce(&mut NewProxy),
-) -> NewProxy {
-    let mut np = NewProxy {
-        proxy_name: name.into(),
-        proxy_type: proxy_type.into(),
+    transport: &orbien_core::config::TunnelTransportConfig,
+    extra: impl FnOnce(&mut NewTunnel),
+) -> NewTunnel {
+    let mut np = NewTunnel {
+        tunnel_name: name.into(),
+        protocol: protocol.into(),
         remote_port,
         local_ip: local_ip.into(),
         local_port: i32::from(local_port),
-        custom_domains: Vec::new(),
-        subdomain: String::new(),
+        domains: Vec::new(),
         locations: Vec::new(),
-        http_user: String::new(),
-        http_pwd: String::new(),
+        basic_auth_user: String::new(),
+        basic_auth_password: String::new(),
         host_header_rewrite: String::new(),
         headers: Default::default(),
         response_headers: Default::default(),
         route_by_http_user: String::new(),
-        bandwidth_limit: transport.bandwidth_limit.clone(),
-        bandwidth_limit_mode: omit_client_mode(&transport.bandwidth_limit_mode),
+        bandwidth: transport.bandwidth,
+        bandwidth_limit_side: omit_client_side(&transport.bandwidth_limit_side),
     };
     extra(&mut np);
     np

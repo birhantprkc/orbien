@@ -6,7 +6,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser, Debug)]
 #[command(
     name = "orbien",
-    about = "orbien client — TCP tunnel over TCP/QUIC",
+    about = "orbien client",
     after_help = "Config:\n  \
         orbien                         # try ./orbien.toml, then ./conf/orbien.toml\n  \
         orbien -c conf/orbien.toml     # explicit path"
@@ -30,11 +30,9 @@ async fn main() -> Result<()> {
     tracing::info!(
         server = %cfg.server_endpoint(),
         protocol = %cfg.transport.protocol,
-        proxies = cfg.proxies.len(),
+        tunnels = cfg.tunnels.len(),
         "starting orbien"
     );
 
-    ClientHandle::new()
-        .run_foreground(cfg, config_path)
-        .await
+    ClientHandle::new().run_foreground(cfg, config_path).await
 }
