@@ -24,10 +24,13 @@ jobs:
 
       - name: Resolve version
         id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            V="${{ inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            V="$INPUT_VERSION"
           else
             V="${GITHUB_REF_NAME#v}"
           fi
@@ -35,16 +38,7 @@ jobs:
             echo "version is empty" >&2
             exit 1
           fi
-          CARGO_V="$(
-            python3 -c '
-import re, pathlib, sys
-text = pathlib.Path("Cargo.toml").read_text()
-m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
-if not m:
-    sys.exit("workspace.package version not found in Cargo.toml")
-print(m.group(1))
-'
-          )"
+          CARGO_V="$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['workspace']['package']['version'])")"
           if [ "$CARGO_V" != "$V" ]; then
             echo "version mismatch: release=$V workspace=$CARGO_V" >&2
             echo "update [workspace.package] version in Cargo.toml before tagging/releasing" >&2
