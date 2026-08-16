@@ -1,4 +1,4 @@
-use crate::access::{prepare_visitor, AccessPolicy};
+use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
 use crate::metrics;
 use anyhow::Result;
@@ -9,7 +9,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 
-pub struct TcpProxy {
+pub struct TcpTunnel {
     pub name: String,
     pub remote_port: u16,
     closed: Arc<AtomicBool>,
@@ -17,7 +17,7 @@ pub struct TcpProxy {
     accept_task: Mutex<Option<JoinHandle<()>>>,
 }
 
-impl TcpProxy {
+impl TcpTunnel {
     pub async fn start(
         name: String,
         bind_addr: String,
@@ -28,13 +28,13 @@ impl TcpProxy {
     ) -> Result<Self> {
         let addr = format!("{bind_addr}:{remote_port}");
         let listener = TcpListener::bind(&addr).await?;
-        tracing::info!(%addr, proxy = %name, "tcp proxy listening");
+        tracing::info!(%addr, tunnel = %name, "tcp tunnel listening");
 
         let closed = Arc::new(AtomicBool::new(false));
         let notify = Arc::new(Notify::new());
         let closed_flag = Arc::clone(&closed);
         let notify_wait = Arc::clone(&notify);
-        let proxy_name = name.clone();
+        let tunnel_name = name.clone();
         let limiter_spawn = limiter.clone();
 
         let control_weak = Arc::downgrade(&control);
@@ -45,28 +45,29 @@ impl TcpProxy {
                     _ = notify_wait.notified() => break,
                     accepted = listener.accept() => {
                         match accepted {
-                            Ok((user_conn, peer)) => {
+                            Ok((stream, peer)) => {
+                                orbien_core::net::enable_nodelay(&stream);
                                 if closed_flag.load(Ordering::SeqCst) {
                                     break;
                                 }
                                 let Some(ctl) = control_weak.upgrade() else {
                                     break;
                                 };
-                                let pname = proxy_name.clone();
+                                let pname = tunnel_name.clone();
                                 let lim = limiter_spawn.clone();
                                 let access = Arc::clone(&access);
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_user_conn(
+                                    if let Err(e) = handle_ingress(
                                         ctl,
                                         &pname,
-                                        user_conn,
+                                        stream,
                                         peer,
                                         lim,
                                         access,
                                     )
                                     .await
                                     {
-                                        tracing::debug!(proxy = %pname, error = %e, "user conn ended");
+                                        tracing::debug!(tunnel = %pname, error = %e, "ingress ended");
                                     }
                                 });
                             }
@@ -90,7 +91,7 @@ impl TcpProxy {
     }
 
     pub async fn close(&self) {
-        tracing::info!(proxy = %self.name, remote_port = self.remote_port, "tcp proxy closing");
+        tracing::info!(tunnel = %self.name, remote_port = self.remote_port, "tcp tunnel closing");
         self.closed.store(true, Ordering::SeqCst);
         self.notify.notify_waiters();
         if let Some(h) = self.accept_task.lock().await.take() {
@@ -100,7 +101,7 @@ impl TcpProxy {
     }
 }
 
-impl Drop for TcpProxy {
+impl Drop for TcpTunnel {
     fn drop(&mut self) {
         self.closed.store(true, Ordering::SeqCst);
         self.notify.notify_waiters();
@@ -110,39 +111,39 @@ impl Drop for TcpProxy {
     }
 }
 
-async fn handle_user_conn(
+async fn handle_ingress(
     control: Arc<Control>,
-    proxy_name: &str,
-    user_conn: tokio::net::TcpStream,
+    tunnel_name: &str,
+    stream: tokio::net::TcpStream,
     peer: std::net::SocketAddr,
     limiter: Option<Arc<BandwidthLimiter>>,
     access: Arc<AccessPolicy>,
 ) -> Result<()> {
-    let visitor = prepare_visitor(user_conn, peer, &access).await?;
-    let work = control.get_work_conn().await?;
-    let work = control
-        .start_work_conn(
-            work,
-            proxy_name,
-            visitor.visitor.ip().to_string(),
-            visitor.visitor.port(),
-            visitor
+    let ingress = prepare_ingress(stream, peer, &access).await?;
+    let data = control.get_data_conn().await?;
+    let data = control
+        .start_data_conn(
+            data,
+            tunnel_name,
+            ingress.source.ip().to_string(),
+            ingress.source.port(),
+            ingress
                 .local
                 .map(|a| a.ip().to_string())
                 .unwrap_or_default(),
-            visitor.local.map(|a| a.port()).unwrap_or(0),
+            ingress.local.map(|a| a.port()).unwrap_or(0),
         )
         .await?;
 
-    let work = maybe_limit(work, limiter);
+    let data = maybe_limit(data, limiter);
 
     tracing::debug!(
-        proxy = %proxy_name,
-        peer = %visitor.peer,
-        visitor = %visitor.visitor,
-        "joining visitor <-> work"
+        tunnel = %tunnel_name,
+        peer = %ingress.peer,
+        source = %ingress.source,
+        "joining ingress <-> data"
     );
     let _ =
-        metrics::join_and_record(&control.metrics, proxy_name, "tcp", visitor.stream, work).await;
+        metrics::join_and_record(&control.metrics, tunnel_name, "tcp", ingress.stream, data).await;
     Ok(())
 }

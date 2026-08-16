@@ -1,15 +1,15 @@
-use super::{HttpProxy, HttpsProxy, TcpProxy, UdpProxy};
+use super::{HttpTunnel, HttpsTunnel, TcpTunnel, UdpTunnel};
 use std::collections::HashMap;
 
-pub enum RegisteredProxy {
-    Tcp(TcpProxy),
-    Http(HttpProxy),
-    Https(HttpsProxy),
-    Udp(UdpProxy),
+pub enum RegisteredTunnel {
+    Tcp(TcpTunnel),
+    Http(HttpTunnel),
+    Https(HttpsTunnel),
+    Udp(UdpTunnel),
 }
 
-impl RegisteredProxy {
-    pub fn proxy_type(&self) -> &'static str {
+impl RegisteredTunnel {
+    pub fn tunnel_type(&self) -> &'static str {
         match self {
             Self::Tcp(_) => "tcp",
             Self::Http(_) => "http",
@@ -28,32 +28,32 @@ impl RegisteredProxy {
     }
 }
 
-struct ProxyEntry {
-    proxy: RegisteredProxy,
+struct TunnelEntry {
+    tunnel: RegisteredTunnel,
     local_addr: String,
 }
 
-pub struct ProxyManager {
-    proxies: HashMap<String, ProxyEntry>,
+pub struct TunnelManager {
+    tunnels: HashMap<String, TunnelEntry>,
 }
 
-impl ProxyManager {
+impl TunnelManager {
     pub fn new() -> Self {
         Self {
-            proxies: HashMap::new(),
+            tunnels: HashMap::new(),
         }
     }
 
     pub async fn insert(
         &mut self,
         name: String,
-        proxy: RegisteredProxy,
+        tunnel: RegisteredTunnel,
         local_addr: String,
     ) -> Option<&'static str> {
-        let entry = ProxyEntry { proxy, local_addr };
-        if let Some(old) = self.proxies.insert(name, entry) {
-            let ty = old.proxy.proxy_type();
-            old.proxy.close().await;
+        let entry = TunnelEntry { tunnel, local_addr };
+        if let Some(old) = self.tunnels.insert(name, entry) {
+            let ty = old.tunnel.tunnel_type();
+            old.tunnel.close().await;
             Some(ty)
         } else {
             None
@@ -61,9 +61,9 @@ impl ProxyManager {
     }
 
     pub async fn remove(&mut self, name: &str) -> Option<&'static str> {
-        if let Some(entry) = self.proxies.remove(name) {
-            let ty = entry.proxy.proxy_type();
-            entry.proxy.close().await;
+        if let Some(entry) = self.tunnels.remove(name) {
+            let ty = entry.tunnel.tunnel_type();
+            entry.tunnel.close().await;
             Some(ty)
         } else {
             None
@@ -71,27 +71,27 @@ impl ProxyManager {
     }
 
     pub async fn close_all(&mut self) -> Vec<(String, &'static str)> {
-        let mut closed = Vec::with_capacity(self.proxies.len());
-        for (name, entry) in self.proxies.drain() {
-            closed.push((name, entry.proxy.proxy_type()));
-            entry.proxy.close().await;
+        let mut closed = Vec::with_capacity(self.tunnels.len());
+        for (name, entry) in self.tunnels.drain() {
+            closed.push((name, entry.tunnel.tunnel_type()));
+            entry.tunnel.close().await;
         }
         closed
     }
 
-    pub fn summaries(&self) -> Vec<ProxySummary> {
-        self.proxies
+    pub fn summaries(&self) -> Vec<TunnelSummary> {
+        self.tunnels
             .iter()
             .map(|(name, entry)| {
-                let (proxy_type, remote_addr) = match &entry.proxy {
-                    RegisteredProxy::Tcp(t) => ("tcp".into(), format!(":{}", t.remote_port)),
-                    RegisteredProxy::Http(h) => ("http".into(), h.domains.join(",")),
-                    RegisteredProxy::Https(h) => ("https".into(), h.domains.join(",")),
-                    RegisteredProxy::Udp(u) => ("udp".into(), format!(":{}", u.remote_port)),
+                let (tunnel_type, remote_addr) = match &entry.tunnel {
+                    RegisteredTunnel::Tcp(t) => ("tcp".into(), format!(":{}", t.remote_port)),
+                    RegisteredTunnel::Http(h) => ("http".into(), h.domains.join(",")),
+                    RegisteredTunnel::Https(h) => ("https".into(), h.domains.join(",")),
+                    RegisteredTunnel::Udp(u) => ("udp".into(), format!(":{}", u.remote_port)),
                 };
-                ProxySummary {
+                TunnelSummary {
                     name: name.clone(),
-                    proxy_type,
+                    tunnel_type,
                     remote_addr,
                     local_addr: entry.local_addr.clone(),
                     status: "online".into(),
@@ -101,7 +101,7 @@ impl ProxyManager {
     }
 
     pub fn len(&self) -> usize {
-        self.proxies.len()
+        self.tunnels.len()
     }
 }
 
@@ -124,10 +124,10 @@ pub fn format_local_addr(ip: &str, port: i32) -> String {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct ProxySummary {
+pub struct TunnelSummary {
     pub name: String,
     #[serde(rename = "type")]
-    pub proxy_type: String,
+    pub tunnel_type: String,
     #[serde(rename = "remoteAddr")]
     pub remote_addr: String,
     #[serde(rename = "localAddr")]

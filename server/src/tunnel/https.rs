@@ -1,10 +1,10 @@
-use super::vhost::{build_domains, normalize_host};
-use crate::access::{prepare_visitor, AccessPolicy};
+use super::gw::{build_domains, normalize_host};
+use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
 use crate::metrics;
 use anyhow::{anyhow, Result};
 use orbien_core::limit::{maybe_limit, BandwidthLimiter};
-use orbien_core::msg::NewProxy;
+use orbien_core::msg::NewTunnel;
 use orbien_core::tls::{peek_client_hello_sni, PrefixedStream};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,17 +14,17 @@ use tokio::sync::{Mutex, Notify};
 
 #[derive(Clone)]
 pub struct HttpsRoute {
-    pub proxy_name: String,
+    pub tunnel_name: String,
     pub control: Weak<Control>,
     pub limiter: Option<Arc<BandwidthLimiter>>,
 }
 
-pub struct HttpsVhost {
+pub struct HttpsGw {
     routes: Mutex<HashMap<String, HttpsRoute>>,
     pub listen_port: u16,
 }
 
-impl HttpsVhost {
+impl HttpsGw {
     pub fn new(listen_port: u16) -> Self {
         Self {
             routes: Mutex::new(HashMap::new()),
@@ -38,14 +38,19 @@ impl HttpsVhost {
             return Err(anyhow!("empty https domain"));
         }
         let mut map = self.routes.lock().await;
+        if let Some(existing) = map.get(&key) {
+            if existing.tunnel_name != route.tunnel_name {
+                return Err(anyhow!("router config conflict: domain={key} (https)"));
+            }
+        }
         map.insert(key.clone(), route);
         tracing::info!(domain = %key, "https route registered");
         Ok(())
     }
 
-    pub async fn unregister_proxy(&self, proxy_name: &str) {
+    pub async fn unregister_tunnel(&self, tunnel_name: &str) {
         let mut map = self.routes.lock().await;
-        map.retain(|_, r| r.proxy_name != proxy_name);
+        map.retain(|_, r| r.tunnel_name != tunnel_name);
     }
 
     pub async fn lookup(&self, sni: &str) -> Option<HttpsRoute> {
@@ -55,47 +60,48 @@ impl HttpsVhost {
     }
 }
 
-pub struct HttpsProxy {
+pub struct HttpsTunnel {
     pub name: String,
     pub domains: Vec<String>,
-    vhost: Arc<HttpsVhost>,
+    gw: Arc<HttpsGw>,
     closed: AtomicBool,
 }
 
-impl HttpsProxy {
+impl HttpsTunnel {
     pub async fn register(
-        np: &NewProxy,
+        np: &NewTunnel,
         control: Arc<Control>,
-        vhost: Arc<HttpsVhost>,
+        gw: Arc<HttpsGw>,
         sub_domain_host: &str,
         limiter: Option<Arc<BandwidthLimiter>>,
     ) -> Result<Self> {
-        let domains = build_domains(&np.custom_domains, &np.subdomain, sub_domain_host)?;
-        let name = np.proxy_name.clone();
+        let domains = build_domains(&np.domains, sub_domain_host)?;
+        let name = np.tunnel_name.clone();
+
+        gw.unregister_tunnel(&name).await;
 
         for domain in &domains {
-            vhost
-                .register(
-                    domain,
-                    HttpsRoute {
-                        proxy_name: name.clone(),
-                        control: Arc::downgrade(&control),
-                        limiter: limiter.clone(),
-                    },
-                )
-                .await?;
+            gw.register(
+                domain,
+                HttpsRoute {
+                    tunnel_name: name.clone(),
+                    control: Arc::downgrade(&control),
+                    limiter: limiter.clone(),
+                },
+            )
+            .await?;
         }
 
         tracing::info!(
-            proxy = %name,
+            tunnel = %name,
             domains = ?domains,
-            "https proxy registered (SNI passthrough)"
+            "https tunnel registered (SNI passthrough)"
         );
 
         Ok(Self {
             name,
             domains,
-            vhost,
+            gw,
             closed: AtomicBool::new(false),
         })
     }
@@ -106,21 +112,21 @@ impl HttpsProxy {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            self.vhost.unregister_proxy(&self.name).await;
+            self.gw.unregister_tunnel(&self.name).await;
         }
     }
 }
 
-pub async fn run_vhost_https_listener(
+pub async fn run_https_gw_listener(
     bind_addr: String,
     port: u16,
-    vhost: Arc<HttpsVhost>,
+    gw: Arc<HttpsGw>,
     access: Arc<AccessPolicy>,
     shutdown: Arc<Notify>,
 ) -> Result<()> {
     let addr = format!("{bind_addr}:{port}");
     let listener = TcpListener::bind(&addr).await?;
-    tracing::info!(%addr, "https vhost listener ready (SNI mux, no TLS terminate)");
+    tracing::info!(%addr, "https gateway listener ready (SNI mux, no TLS terminate)");
 
     loop {
         tokio::select! {
@@ -128,16 +134,17 @@ pub async fn run_vhost_https_listener(
             accepted = listener.accept() => {
                 match accepted {
                     Ok((stream, peer)) => {
-                        let vhost = Arc::clone(&vhost);
+                        orbien_core::net::enable_nodelay(&stream);
+                        let gw = Arc::clone(&gw);
                         let access = Arc::clone(&access);
                         tokio::spawn(async move {
-                            if let Err(e) = handle_https_visitor(vhost, stream, peer, access).await {
-                                tracing::debug!(%peer, error = %e, "https visitor ended");
+                            if let Err(e) = handle_https_ingress(gw, stream, peer, access).await {
+                                tracing::debug!(%peer, error = %e, "https ingress ended");
                             }
                         });
                     }
                     Err(e) => {
-                        tracing::warn!(error = %e, "https vhost accept failed");
+                        tracing::warn!(error = %e, "https gateway accept failed");
                         break;
                     }
                 }
@@ -147,18 +154,18 @@ pub async fn run_vhost_https_listener(
     Ok(())
 }
 
-async fn handle_https_visitor(
-    vhost: Arc<HttpsVhost>,
+async fn handle_https_ingress(
+    gw: Arc<HttpsGw>,
     stream: TcpStream,
     peer: std::net::SocketAddr,
     access: Arc<AccessPolicy>,
 ) -> Result<()> {
-    let mut visitor = prepare_visitor(stream, peer, &access).await?;
-    let (sni, prefix) = peek_client_hello_sni(&mut visitor.stream).await?;
-    let Some(route) = vhost.lookup(&sni).await else {
+    let mut ingress = prepare_ingress(stream, peer, &access).await?;
+    let (sni, prefix) = peek_client_hello_sni(&mut ingress.stream).await?;
+    let Some(route) = gw.lookup(&sni).await else {
         tracing::debug!(
-            peer = %visitor.peer,
-            visitor = %visitor.visitor,
+            peer = %ingress.peer,
+            source = %ingress.source,
             %sni,
             "https no route for SNI"
         );
@@ -167,35 +174,35 @@ async fn handle_https_visitor(
     };
 
     let Some(control) = route.control.upgrade() else {
-        return Err(anyhow!("https proxy client gone: {}", route.proxy_name));
+        return Err(anyhow!("https tunnel client gone: {}", route.tunnel_name));
     };
 
-    let work = control.get_work_conn().await?;
-    let work = control
-        .start_work_conn(
-            work,
-            &route.proxy_name,
-            visitor.visitor.ip().to_string(),
-            visitor.visitor.port(),
-            visitor
+    let data = control.get_data_conn().await?;
+    let data = control
+        .start_data_conn(
+            data,
+            &route.tunnel_name,
+            ingress.source.ip().to_string(),
+            ingress.source.port(),
+            ingress
                 .local
                 .map(|a| a.ip().to_string())
                 .unwrap_or_default(),
-            visitor.local.map(|a| a.port()).unwrap_or(0),
+            ingress.local.map(|a| a.port()).unwrap_or(0),
         )
         .await?;
 
-    let work = maybe_limit(work, route.limiter.clone());
-    let user = PrefixedStream::new(prefix, visitor.stream);
+    let data = maybe_limit(data, route.limiter.clone());
+    let user = PrefixedStream::new(prefix, ingress.stream);
 
     tracing::debug!(
-        proxy = %route.proxy_name,
+        tunnel = %route.tunnel_name,
         %sni,
-        peer = %visitor.peer,
-        visitor = %visitor.visitor,
-        "https joining visitor <-> work (passthrough)"
+        peer = %ingress.peer,
+        source = %ingress.source,
+        "https joining ingress <-> data (passthrough)"
     );
     let _ =
-        metrics::join_and_record(&control.metrics, &route.proxy_name, "https", user, work).await;
+        metrics::join_and_record(&control.metrics, &route.tunnel_name, "https", user, data).await;
     Ok(())
 }

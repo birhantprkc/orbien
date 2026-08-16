@@ -3,7 +3,7 @@ use crate::metrics::{MemMetrics, ServerMetrics};
 use anyhow::Result;
 use orbien_core::limit::{maybe_limit, BandwidthLimiter};
 use orbien_core::msg::{self, Message, UdpPacket};
-use orbien_core::udp::{forward_user_conn, CHANNEL_CAP, SERVER_WORK_READ_DEADLINE};
+use orbien_core::udp::{forward_user_conn, CHANNEL_CAP, SERVER_DATA_READ_DEADLINE};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
-pub struct UdpProxy {
+pub struct UdpTunnel {
     pub name: String,
     pub remote_port: u16,
     closed: Arc<AtomicBool>,
@@ -23,7 +23,7 @@ pub struct UdpProxy {
     _udp: Arc<UdpSocket>,
 }
 
-impl UdpProxy {
+impl UdpTunnel {
     pub async fn start(
         name: String,
         bind_addr: String,
@@ -34,7 +34,7 @@ impl UdpProxy {
     ) -> Result<Self> {
         let addr = format!("{bind_addr}:{remote_port}");
         let udp = Arc::new(UdpSocket::bind(&addr).await?);
-        tracing::info!(%addr, proxy = %name, "udp proxy listening");
+        tracing::info!(%addr, tunnel = %name, "udp tunnel listening");
 
         let closed = Arc::new(AtomicBool::new(false));
         let notify = Arc::new(Notify::new());
@@ -58,12 +58,12 @@ impl UdpProxy {
         {
             let closed_flag = Arc::clone(&closed);
             let notify_wait = Arc::clone(&notify);
-            let proxy_name = name.clone();
+            let tunnel_name = name.clone();
             let control = Arc::downgrade(&control);
             tasks.push(tokio::spawn(async move {
                 sleep(Duration::from_millis(500)).await;
-                work_conn_loop(
-                    proxy_name,
+                data_conn_loop(
+                    tunnel_name,
                     control,
                     limiter,
                     send_rx,
@@ -86,7 +86,7 @@ impl UdpProxy {
     }
 
     pub async fn close(&self) {
-        tracing::info!(proxy = %self.name, remote_port = self.remote_port, "udp proxy closing");
+        tracing::info!(tunnel = %self.name, remote_port = self.remote_port, "udp tunnel closing");
         self.closed.store(true, Ordering::SeqCst);
         self.notify.notify_waiters();
         let tasks = std::mem::take(&mut *self.tasks.lock().await);
@@ -97,7 +97,7 @@ impl UdpProxy {
     }
 }
 
-impl Drop for UdpProxy {
+impl Drop for UdpTunnel {
     fn drop(&mut self) {
         self.closed.store(true, Ordering::SeqCst);
         self.notify.notify_waiters();
@@ -112,8 +112,8 @@ async fn abort_wait(h: JoinHandle<()>) {
     let _ = h.await;
 }
 
-async fn work_conn_loop(
-    proxy_name: String,
+async fn data_conn_loop(
+    tunnel_name: String,
     control: std::sync::Weak<Control>,
     limiter: Option<Arc<BandwidthLimiter>>,
     mut send_rx: mpsc::Receiver<UdpPacket>,
@@ -126,17 +126,17 @@ async fn work_conn_loop(
             return;
         };
 
-        let work = {
+        let data = {
             tokio::select! {
                 _ = notify.notified() => return,
-                w = control.get_work_conn() => w,
+                w = control.get_data_conn() => w,
             }
         };
 
-        let work = match work {
+        let data = match data {
             Ok(w) => w,
             Err(e) => {
-                tracing::warn!(proxy = %proxy_name, error = %e, "udp get work conn failed");
+                tracing::warn!(tunnel = %tunnel_name, error = %e, "udp get data conn failed");
                 tokio::select! {
                     _ = notify.notified() => return,
                     _ = sleep(Duration::from_secs(1)) => continue,
@@ -144,34 +144,34 @@ async fn work_conn_loop(
             }
         };
 
-        let work = match control
-            .start_work_conn(work, &proxy_name, String::new(), 0, String::new(), 0)
+        let data = match control
+            .start_data_conn(data, &tunnel_name, String::new(), 0, String::new(), 0)
             .await
         {
             Ok(w) => w,
             Err(e) => {
-                tracing::warn!(proxy = %proxy_name, error = %e, "udp StartWorkConn failed");
+                tracing::warn!(tunnel = %tunnel_name, error = %e, "udp StartDataConn failed");
                 sleep(Duration::from_secs(1)).await;
                 continue;
             }
         };
 
-        let work = maybe_limit(work, limiter.clone());
-        let (reader, mut writer) = tokio::io::split(work);
+        let data = maybe_limit(data, limiter.clone());
+        let (reader, mut writer) = tokio::io::split(data);
         tracing::info!(
-            proxy = %proxy_name,
-            "udp work conn established"
+            tunnel = %tunnel_name,
+            "udp data conn established"
         );
         let metrics = Arc::clone(&control.metrics);
-        let _guard = metrics.track_connection(&proxy_name, "udp");
+        let _guard = metrics.track_connection(&tunnel_name, "udp");
 
         let (fail_tx, mut fail_rx) = mpsc::channel::<()>(1);
         let read_tx_r = read_tx.clone();
         let fail_r = fail_tx.clone();
-        let name_r = proxy_name.clone();
+        let name_r = tunnel_name.clone();
         let metrics_r = Arc::clone(&metrics);
         let mut reader_task = Some(tokio::spawn(async move {
-            work_reader(reader, read_tx_r, fail_r, name_r, metrics_r).await;
+            data_reader(reader, read_tx_r, fail_r, name_r, metrics_r).await;
         }));
 
         let reconnect = loop {
@@ -193,21 +193,21 @@ async fn work_conn_loop(
                         Some(pkt) => {
                             let nbytes = pkt.content.len() as u64;
                             tracing::trace!(
-                                proxy = %proxy_name,
+                                tunnel = %tunnel_name,
                                 len = nbytes,
-                                "udp packet to work"
+                                "udp packet to data"
                             );
                             if msg::write_msg(&mut writer, &Message::UdpPacket(pkt))
                                 .await
                                 .is_err()
                             {
-                                tracing::warn!(proxy = %proxy_name, "udp work write error");
+                                tracing::warn!(tunnel = %tunnel_name, "udp data write error");
                                 if let Some(h) = reader_task.take() {
                                     abort_wait(h).await;
                                 }
                                 break true;
                             }
-                            metrics.add_traffic_in(&proxy_name, "udp", nbytes);
+                            metrics.add_traffic_in(&tunnel_name, "udp", nbytes);
                         }
                         None => {
                             if let Some(h) = reader_task.take() {
@@ -221,47 +221,47 @@ async fn work_conn_loop(
         };
 
         if reconnect {
-            tracing::info!(proxy = %proxy_name, "udp work conn lost; reconnecting");
+            tracing::info!(tunnel = %tunnel_name, "udp data conn lost; reconnecting");
         }
     }
 }
 
-async fn work_reader<R: AsyncRead + Unpin + Send + 'static>(
+async fn data_reader<R: AsyncRead + Unpin + Send + 'static>(
     mut reader: R,
     read_tx: mpsc::Sender<UdpPacket>,
     fail_tx: mpsc::Sender<()>,
-    proxy_name: String,
+    tunnel_name: String,
     metrics: Arc<MemMetrics>,
 ) {
     loop {
-        match timeout(SERVER_WORK_READ_DEADLINE, msg::read_msg(&mut reader)).await {
+        match timeout(SERVER_DATA_READ_DEADLINE, msg::read_msg(&mut reader)).await {
             Ok(Ok(Message::Ping(_))) => {
-                tracing::trace!(proxy = %proxy_name, "udp work ping");
+                tracing::trace!(tunnel = %tunnel_name, "udp data ping");
             }
             Ok(Ok(Message::UdpPacket(pkt))) => {
                 let nbytes = pkt.content.len() as u64;
                 tracing::trace!(
-                    proxy = %proxy_name,
+                    tunnel = %tunnel_name,
                     len = nbytes,
-                    "udp packet from work"
+                    "udp packet from data"
                 );
-                metrics.add_traffic_out(&proxy_name, "udp", nbytes);
+                metrics.add_traffic_out(&tunnel_name, "udp", nbytes);
                 let _ = read_tx.try_send(pkt);
             }
             Ok(Ok(other)) => {
                 tracing::debug!(
-                    proxy = %proxy_name,
+                    tunnel = %tunnel_name,
                     ty = other.type_byte(),
-                    "udp work unexpected message"
+                    "udp data unexpected message"
                 );
             }
             Ok(Err(e)) => {
-                tracing::warn!(proxy = %proxy_name, error = %e, "udp work read error");
+                tracing::warn!(tunnel = %tunnel_name, error = %e, "udp data read error");
                 let _ = fail_tx.send(()).await;
                 return;
             }
             Err(_) => {
-                tracing::warn!(proxy = %proxy_name, "udp work read deadline exceeded");
+                tracing::warn!(tunnel = %tunnel_name, "udp data read deadline exceeded");
                 let _ = fail_tx.send(()).await;
                 return;
             }
