@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.1.0-SNAPSHOT"
+version = "3.0.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["orbien"]
@@ -41,7 +41,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
-md-5 = "0.10"
+hmac = "0.12"
+sha2 = "0.10"
 hex = "0.4"
 base64 = "0.22"
 bytes = "1"
@@ -61,3 +62,4 @@ axum = { version = "0.8", features = ["tokio", "http1"] }
 rust-embed = "8"
 hostname = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tls-parser = "0.12"

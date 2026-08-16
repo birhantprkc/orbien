@@ -1,15 +1,13 @@
-use md5::{Digest, Md5};
-use std::io::Write;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 pub fn compute_auth_digest(token: &str, timestamp: i64) -> String {
-    let mut hasher = Md5::new();
-    hasher.update(token.as_bytes());
-    let mut ts = [0u8; 20];
-    let mut cur = std::io::Cursor::new(&mut ts[..]);
-    let _ = write!(cur, "{timestamp}");
-    let n = cur.position() as usize;
-    hasher.update(&ts[..n]);
-    hex::encode(hasher.finalize())
+    let mut mac =
+        HmacSha256::new_from_slice(token.as_bytes()).expect("HMAC-SHA256 accepts any key length");
+    mac.update(timestamp.to_string().as_bytes());
+    hex::encode(mac.finalize().into_bytes())
 }
 
 pub fn verify_login(token: &str, auth_digest: &str, timestamp: i64) -> bool {
@@ -23,5 +21,12 @@ pub fn verify_auth_digest(token: &str, auth_digest: &str, timestamp: i64) -> boo
     if auth_digest.is_empty() {
         return false;
     }
-    compute_auth_digest(token, timestamp) == auth_digest
+    let Ok(expected) = hex::decode(auth_digest) else {
+        return false;
+    };
+    let Ok(mut mac) = HmacSha256::new_from_slice(token.as_bytes()) else {
+        return false;
+    };
+    mac.update(timestamp.to_string().as_bytes());
+    mac.verify_slice(&expected).is_ok()
 }
