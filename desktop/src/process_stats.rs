@@ -183,18 +183,17 @@ fn memory_bytes() -> u64 {
         pagefile_usage: usize,
         peak_pagefile_usage: usize,
     }
-    #[link(name = "psapi")]
+    #[link(name = "kernel32")]
     extern "system" {
         fn GetCurrentProcess() -> isize;
+    }
+    #[link(name = "psapi")]
+    extern "system" {
         fn GetProcessMemoryInfo(
             process: isize,
             ppsmem_counters: *mut ProcessMemoryCounters,
             cb: u32,
         ) -> i32;
-    }
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn GetCurrentProcess() -> isize;
     }
     unsafe {
         let mut counters = std::mem::zeroed::<ProcessMemoryCounters>();
