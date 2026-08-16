@@ -1,21 +1,13 @@
 export interface MessageSchema {
-    app: {
-        brand: string
-        brandAccent: string
-        title: string
-    }
     nav: {
         menu: string
         monitor: string
-        proxies: string
+        tunnels: string
         clients: string
     }
     actions: {
-        refresh: string
         themeToLight: string
         themeToDark: string
-        themeLightHint: string
-        themeDarkHint: string
         locale: string
         github: string
         collapseSidebar: string
@@ -34,63 +26,32 @@ export interface MessageSchema {
         nextPage: string
     }
     overview: {
-        version: string
-        clients: string
         totalClients: string
         onlineClients: string
-        proxies: string
+        tunnels: string
         connections: string
-        bindPort: string
-        server: string
         emptyConfig: string
     }
     monitor: {
         listen: string
-        listenDesc: string
-        vhost: string
-        vhostDesc: string
-        proxyTypes: string
-        proxyTypesDesc: string
-        proxyDist: string
-        proxyDistDesc: string
+        tunnelTypes: string
+        tunnelDist: string
         serverConfig: string
         chartTotal: string
-        metricAddr: string
-        metricTcp: string
-        metricWebsocket: string
-        metricQuic: string
-        metricKcp: string
-        metricHttp: string
-        metricHttps: string
-        metricTcpMux: string
-        metricTlsForce: string
-        metricSubDomain: string
-        metricMaxPool: string
-        metricHeartbeat: string
-        bindAddr: string
-        bindPort: string
-        quicBindPort: string
-        kcpBindPort: string
+        quicPort: string
+        kcpPort: string
         tcpMux: string
         tlsForce: string
-        vhostHTTPPort: string
-        vhostHTTPSPort: string
-        subDomainHost: string
-        tipPortZero: string
-        hintClients: string
-        hintProxies: string
-        hintConns: string
-        hintBind: string
-        hintMuxOn: string
-        hintMuxOff: string
+        httpGwPort: string
+        httpsGwPort: string
+        rootDomain: string
+        maxConnPool: string
+        heartbeatTimeout: string
+        version: string
     }
     clients: {
-        runId: string
-        user: string
         hostname: string
         ip: string
-        os: string
-        arch: string
         osFamily: {
             windows: string
             macos: string
@@ -99,13 +60,10 @@ export interface MessageSchema {
             freebsd: string
             other: string
         }
-        version: string
-        status: string
-        proxies: string
+        tunnels: string
         connected: string
         disconnected: string
         connections: string
-        connectedSecs: string
         empty: string
         filter: string
         filterAll: string
@@ -125,24 +83,18 @@ export interface MessageSchema {
         detail: string
         notFound: string
         notFoundDesc: string
-        searchProxies: string
-        proxiesEmpty: string
-        proxiesSearchEmpty: string
+        searchTunnels: string
+        tunnelsEmpty: string
+        tunnelsSearchEmpty: string
     }
-    proxies: {
-        name: string
-        type: string
+    tunnels: {
         port: string
         domain: string
         localAddr: string
         client: string
-        status: string
         empty: string
         traffic: string
-        trafficIn: string
-        trafficOut: string
-        curConns: string
-        total: string
+        activeConns: string
         filter: string
         filterAll: string
         filterEmpty: string
@@ -156,12 +108,8 @@ export interface MessageSchema {
         total: string
         today: string
         network: string
-        networkDesc: string
         history: string
-        historyDesc: string
         historyAll: string
-        historyAllDesc: string
-        historyAllDesc24h: string
         range: string
         range24h: string
         range7d: string

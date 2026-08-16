@@ -2,6 +2,8 @@
 import {computed} from 'vue'
 import {formatFileSize} from '@/utils/format'
 import {useLocale} from '@/composables/useLocale'
+import downloadIcon from '@/assets/icon/download.svg?raw'
+import uploadIcon from '@/assets/icon/upload.svg?raw'
 
 const props = withDefaults(
     defineProps<{
@@ -36,13 +38,7 @@ const outShare = computed(() => 100 - inShare.value)
 
     <div class="traffic-split">
       <div class="traffic-item in">
-        <div class="traffic-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 3v12"/>
-            <path d="m7 10 5 5 5-5"/>
-            <path d="M5 19h14"/>
-          </svg>
-        </div>
+        <div class="traffic-icon is-asset" aria-hidden="true" v-html="downloadIcon"/>
         <div class="traffic-meta">
           <div class="traffic-label">{{ t('traffic.in') }}</div>
           <div class="traffic-value">{{ formatFileSize(inbound) }}</div>
@@ -52,13 +48,7 @@ const outShare = computed(() => 100 - inShare.value)
       <div class="traffic-divider" aria-hidden="true"/>
 
       <div class="traffic-item out">
-        <div class="traffic-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 21V9"/>
-            <path d="m7 14 5-5 5 5"/>
-            <path d="M5 5h14"/>
-          </svg>
-        </div>
+        <div class="traffic-icon is-asset" aria-hidden="true" v-html="uploadIcon"/>
         <div class="traffic-meta">
           <div class="traffic-label">{{ t('traffic.out') }}</div>
           <div class="traffic-value">{{ formatFileSize(outbound) }}</div>
@@ -128,14 +118,16 @@ const outShare = computed(() => 100 - inShare.value)
   flex-shrink: 0;
 }
 
-.traffic-icon svg {
-  width: 1.25rem;
-  height: 1.25rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.traffic-icon.is-asset {
+  line-height: 0;
+}
+
+.traffic-icon.is-asset :deep(svg) {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+  fill: currentColor;
+  stroke: none;
 }
 
 .traffic-item.in .traffic-icon {

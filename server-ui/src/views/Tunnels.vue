@@ -5,7 +5,8 @@ import PaginationBar from '@/components/PaginationBar.vue'
 import TrafficIO from '@/components/TrafficIO.vue'
 import {useDashboardStore} from '@/stores/dashboard'
 import {useLocale} from '@/composables/useLocale'
-import {formatProxyEndpoint, isHttpProxyType} from '@/utils/format'
+import {usePresence} from '@/composables/usePresence'
+import {formatTunnelEndpoint, isHttpTunnelType} from '@/utils/format'
 
 type ProtocolFilter = 'all' | 'tcp' | 'udp' | 'http' | 'https'
 
@@ -13,6 +14,7 @@ const PROTOCOLS: ProtocolFilter[] = ['all', 'tcp', 'udp', 'http', 'https']
 
 const store = useDashboardStore()
 const {t} = useLocale()
+const {isOnline, statusLabel} = usePresence()
 const router = useRouter()
 
 const page = ref(1)
@@ -20,7 +22,7 @@ const pageSize = ref(10)
 const protocol = ref<ProtocolFilter>('all')
 
 const filtered = computed(() => {
-  const list = store.proxies
+  const list = store.tunnels
   if (protocol.value === 'all') return list
   return list.filter((p) => (p.type || '').toLowerCase() === protocol.value)
 })
@@ -34,14 +36,14 @@ const pageItems = computed(() => {
 
 const typeCounts = computed(() => {
   const counts: Record<ProtocolFilter, number> = {
-    all: store.proxies.length,
+    all: store.tunnels.length,
     tcp: 0,
     udp: 0,
     http: 0,
     https: 0,
   }
-  for (const p of store.proxies) {
-    const ty = (p.type || '').toLowerCase() as ProtocolFilter
+  for (const tunnel of store.tunnels) {
+    const ty = (tunnel.type || '').toLowerCase() as ProtocolFilter
     if (ty in counts && ty !== 'all') counts[ty] += 1
   }
   return counts
@@ -57,21 +59,12 @@ watch(protocol, () => {
 })
 
 function protocolLabel(key: ProtocolFilter) {
-  if (key === 'all') return t('proxies.filterAll')
+  if (key === 'all') return t('tunnels.filterAll')
   return key.toUpperCase()
 }
 
-function statusLabel(raw?: string) {
-  if (!raw || raw === 'online') return t('status.online')
-  return raw
-}
-
-function isOnline(raw?: string) {
-  return !raw || raw === 'online'
-}
-
 function openDetail(name: string) {
-  router.push({name: 'proxy-detail', params: {name}})
+  router.push({name: 'tunnel-detail', params: {name}})
 }
 
 function onKeyOpen(evt: KeyboardEvent, name: string) {
@@ -83,8 +76,8 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
 </script>
 
 <template>
-  <section class="proxy-list">
-    <div class="list-toolbar" role="group" :aria-label="t('proxies.filter')">
+  <section class="tunnel-list">
+    <div class="list-toolbar" role="group" :aria-label="t('tunnels.filter')">
       <button
           v-for="key in PROTOCOLS"
           :key="key"
@@ -98,52 +91,52 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
       </button>
     </div>
 
-    <div v-if="!store.proxies.length" class="empty-card">
-      {{ t('proxies.empty') }}
+    <div v-if="!store.tunnels.length" class="empty-card">
+      {{ t('tunnels.empty') }}
     </div>
     <div v-else-if="!filtered.length" class="empty-card">
-      {{ t('proxies.filterEmpty') }}
+      {{ t('tunnels.filterEmpty') }}
     </div>
 
     <article
-        v-for="p in pageItems"
-        :key="`${p.name}:${p.clientId}`"
-        class="proxy-card"
+        v-for="tunnel in pageItems"
+        :key="`${tunnel.name}:${tunnel.sessionId}`"
+        class="tunnel-card"
         role="button"
         tabindex="0"
-        @click="openDetail(p.name)"
-        @keydown="onKeyOpen($event, p.name)"
+        @click="openDetail(tunnel.name)"
+        @keydown="onKeyOpen($event, tunnel.name)"
     >
-      <div class="proxy-main">
-        <div class="proxy-title">
-          <h3 class="proxy-name">{{ p.name }}</h3>
-          <span class="proxy-type">{{ (p.type || '—').toUpperCase() }}</span>
+      <div class="tunnel-main">
+        <div class="tunnel-title">
+          <h3 class="tunnel-name">{{ tunnel.name }}</h3>
+          <span class="tunnel-type">{{ (tunnel.type || '—').toUpperCase() }}</span>
         </div>
-        <div class="proxy-meta">
+        <div class="tunnel-meta">
           <span class="meta-endpoint">
-            <em>{{ isHttpProxyType(p.type) ? t('proxies.domain') : t('proxies.port') }}</em>
-            <code>{{ formatProxyEndpoint(p.type, p.remoteAddr) }}</code>
+            <em>{{ isHttpTunnelType(tunnel.type) ? t('tunnels.domain') : t('tunnels.port') }}</em>
+            <code>{{ formatTunnelEndpoint(tunnel.type, tunnel.remoteAddr) }}</code>
           </span>
           <span class="meta-arrow" aria-hidden="true">→</span>
           <span class="meta-endpoint">
-            <em>{{ t('proxies.localAddr') }}</em>
-            <code>{{ p.localAddr || '—' }}</code>
+            <em>{{ t('tunnels.localAddr') }}</em>
+            <code>{{ tunnel.localAddr || '—' }}</code>
           </span>
           <span>
-            <em>{{ t('proxies.curConns') }}</em>
-            {{ p.curConns ?? 0 }}
+            <em>{{ t('tunnels.activeConns') }}</em>
+            {{ tunnel.activeConns ?? 0 }}
           </span>
           <span class="meta-client">
-            <em>{{ t('proxies.client') }}</em>
-            {{ p.clientId || '—' }}
+            <em>{{ t('tunnels.client') }}</em>
+            {{ tunnel.sessionId || '—' }}
           </span>
         </div>
       </div>
 
-      <div class="proxy-side">
-        <TrafficIO :traffic-in="p.todayTrafficIn" :traffic-out="p.todayTrafficOut"/>
-        <span class="status-badge" :class="{ online: isOnline(p.status) }">
-          {{ statusLabel(p.status) }}
+      <div class="tunnel-side">
+        <TrafficIO :traffic-in="tunnel.todayTrafficIn" :traffic-out="tunnel.todayTrafficOut"/>
+        <span class="status-badge" :class="{ online: isOnline(tunnel.status) }">
+          {{ statusLabel(tunnel.status) }}
         </span>
       </div>
     </article>
@@ -157,7 +150,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
 </template>
 
 <style scoped>
-.proxy-list {
+.tunnel-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -227,7 +220,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   box-shadow: var(--shadow);
 }
 
-.proxy-card {
+.tunnel-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -243,17 +236,17 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   transform 0.18s ease;
 }
 
-.proxy-card:hover {
+.tunnel-card:hover {
   border-color: var(--line-strong);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.proxy-card:focus-visible {
+.tunnel-card:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 2px;
 }
 
-.proxy-main {
+.tunnel-main {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -261,14 +254,14 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   gap: 0.45rem;
 }
 
-.proxy-title {
+.tunnel-title {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.55rem;
 }
 
-.proxy-name {
+.tunnel-name {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
@@ -276,14 +269,14 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   letter-spacing: -0.01em;
 }
 
-.proxy-type {
+.tunnel-type {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--muted);
 }
 
-.proxy-meta {
+.tunnel-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -292,7 +285,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   color: var(--text);
 }
 
-.proxy-meta em {
+.tunnel-meta em {
   font-style: normal;
   color: var(--muted);
   margin-right: 0.3rem;
@@ -333,7 +326,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   }
 }
 
-.proxy-side {
+.tunnel-side {
   display: flex;
   align-items: center;
   gap: 1.1rem;
@@ -361,13 +354,13 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
 }
 
 @media (max-width: 720px) {
-  .proxy-card {
+  .tunnel-card {
     flex-direction: column;
     align-items: stretch;
     gap: 0.85rem;
   }
 
-  .proxy-side {
+  .tunnel-side {
     justify-content: space-between;
   }
 }

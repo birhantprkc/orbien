@@ -8,39 +8,32 @@ import TrafficIO from '@/components/TrafficIO.vue'
 import type {TrafficRange} from '@/api/client'
 import {useDashboardStore} from '@/stores/dashboard'
 import {useLocale} from '@/composables/useLocale'
-import {formatProxyEndpoint, isHttpProxyType} from '@/utils/format'
+import {usePresence} from '@/composables/usePresence'
+import {formatTunnelEndpoint, isHttpTunnelType} from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
 const store = useDashboardStore()
 const {t} = useLocale()
+const {isOnline, statusLabel} = usePresence()
 const trafficRange = ref<TrafficRange>('24h')
 const chartVariant = ref<'bar' | 'line'>('bar')
 const name = computed(() => String(route.params.name || ''))
-const proxy = computed(() => store.proxies.find((p) => p.name === name.value) || null)
-
-function statusLabel(raw?: string) {
-  if (!raw || raw === 'online') return t('status.online')
-  return raw
-}
-
-function isOnline(raw?: string) {
-  return !raw || raw === 'online'
-}
+const tunnel = computed(() => store.tunnels.find((t) => t.name === name.value) || null)
 
 function goBack() {
-  router.push({name: 'proxies'})
+  router.push({name: 'tunnels'})
 }
 
-function openClient(runId: string) {
-  if (!runId) return
-  router.push({name: 'client-detail', params: {runId}})
+function openClient(sessionId: string) {
+  if (!sessionId) return
+  router.push({name: 'client-detail', params: {sessionId}})
 }
 </script>
 
 <template>
   <div class="detail">
-    <button class="back" type="button" @click="goBack">← {{ t('proxies.back') }}</button>
+    <button class="back" type="button" @click="goBack">← {{ t('tunnels.back') }}</button>
 
     <section class="summary card">
       <div class="summary-head">
@@ -50,32 +43,32 @@ function openClient(runId: string) {
           </div>
           <div class="head-body">
             <div class="title-row">
-              <h2 class="name">{{ proxy?.name || name }}</h2>
-              <span class="type-badge">{{ (proxy?.type || '—').toUpperCase() }}</span>
-              <span class="status-badge" :class="{ online: isOnline(proxy?.status) }">
-                {{ statusLabel(proxy?.status) }}
+              <h2 class="name">{{ tunnel?.name || name }}</h2>
+              <span class="type-badge">{{ (tunnel?.type || '—').toUpperCase() }}</span>
+              <span class="status-badge" :class="{ online: isOnline(tunnel?.status) }">
+                {{ statusLabel(tunnel?.status) }}
               </span>
             </div>
             <div class="meta">
               <button
-                  v-if="proxy?.clientId"
+                  v-if="tunnel?.sessionId"
                   type="button"
                   class="meta-client"
-                  :title="t('proxies.openClient')"
-                  :aria-label="t('proxies.openClient')"
-                  @click="openClient(proxy.clientId)"
+                  :title="t('tunnels.openClient')"
+                  :aria-label="t('tunnels.openClient')"
+                  @click="openClient(tunnel.sessionId)"
               >
                 <AppIcon name="monitor"/>
-                <code>{{ proxy.clientId }}</code>
+                <code>{{ tunnel.sessionId }}</code>
               </button>
               <span v-else class="meta-client is-empty">
                 <AppIcon name="monitor"/>
                 <code>—</code>
               </span>
-              <template v-if="proxy?.lastStartTime">
+              <template v-if="tunnel?.lastStartTime">
                 <span class="meta-sep" aria-hidden="true">·</span>
                 <span class="meta-text">
-                  {{ t('proxies.lastStarted', {time: proxy.lastStartTime}) }}
+                  {{ t('tunnels.lastStarted', {time: tunnel.lastStartTime}) }}
                 </span>
               </template>
             </div>
@@ -85,26 +78,26 @@ function openClient(runId: string) {
 
       <div class="metrics" role="list">
         <div class="metric" role="listitem">
-          <em>{{ isHttpProxyType(proxy?.type) ? t('proxies.domain') : t('proxies.port') }}</em>
+          <em>{{ isHttpTunnelType(tunnel?.type) ? t('tunnels.domain') : t('tunnels.port') }}</em>
           <div class="metric-value mono">
-            {{ formatProxyEndpoint(proxy?.type, proxy?.remoteAddr) }}
+            {{ formatTunnelEndpoint(tunnel?.type, tunnel?.remoteAddr) }}
           </div>
         </div>
         <div class="metric" role="listitem">
-          <em>{{ t('proxies.localAddr') }}</em>
-          <div class="metric-value mono">{{ proxy?.localAddr || '—' }}</div>
+          <em>{{ t('tunnels.localAddr') }}</em>
+          <div class="metric-value mono">{{ tunnel?.localAddr || '—' }}</div>
         </div>
         <div class="metric" role="listitem">
-          <em>{{ t('proxies.curConns') }}</em>
-          <div class="metric-value">{{ proxy?.curConns ?? 0 }}</div>
+          <em>{{ t('tunnels.activeConns') }}</em>
+          <div class="metric-value">{{ tunnel?.activeConns ?? 0 }}</div>
         </div>
         <div class="metric" role="listitem">
-          <em>{{ t('proxies.traffic') }}</em>
+          <em>{{ t('tunnels.traffic') }}</em>
           <div class="metric-value">
             <TrafficIO
                 layout="inline"
-                :traffic-in="proxy?.todayTrafficIn"
-                :traffic-out="proxy?.todayTrafficOut"
+                :traffic-in="tunnel?.todayTrafficIn"
+                :traffic-out="tunnel?.todayTrafficOut"
             />
           </div>
         </div>
@@ -153,7 +146,7 @@ function openClient(runId: string) {
         </div>
       </template>
       <TrafficChart
-          :proxy-name="name"
+          :tunnel-name="name"
           :range="trafficRange"
           :variant="chartVariant"
           :refresh-ms="5000"

@@ -7,6 +7,8 @@ import PaginationBar from '@/components/PaginationBar.vue'
 import {kickClient} from '@/api'
 import {useDashboardStore} from '@/stores/dashboard'
 import {useLocale} from '@/composables/useLocale'
+import {usePresence} from '@/composables/usePresence'
+import signalIcon from '@/assets/icon/signal.svg?raw'
 
 type StatusFilter = 'all' | 'online' | 'offline'
 
@@ -15,15 +17,12 @@ const FILTERS: StatusFilter[] = ['all', 'online', 'offline']
 const store = useDashboardStore()
 const router = useRouter()
 const {t} = useLocale()
+const {isOnline, statusLabel, formatSeen} = usePresence()
 
 const page = ref(1)
 const pageSize = ref(10)
 const statusFilter = ref<StatusFilter>('all')
 const kicking = ref<string | null>(null)
-
-function isOnline(raw?: string) {
-  return !raw || raw === 'online'
-}
 
 const filtered = computed(() => {
   const list = store.clients
@@ -68,45 +67,24 @@ function filterLabel(key: StatusFilter) {
   return t('status.offline')
 }
 
-function statusLabel(raw?: string) {
-  if (isOnline(raw)) return t('status.online')
-  if (raw === 'offline') return t('status.offline')
-  return raw || t('status.offline')
+function openDetail(sessionId: string) {
+  router.push({name: 'client-detail', params: {sessionId}})
 }
 
-/** Online: uptime. Offline: time since disconnect. */
-function formatSeen(secs: number, online: boolean) {
-  const n = Math.max(0, Math.floor(secs || 0))
-  if (online) {
-    if (n < 60) return t('clients.uptimeSecs', {n})
-    if (n < 3600) return t('clients.uptimeMins', {n: Math.floor(n / 60)})
-    if (n < 86400) return t('clients.uptimeHours', {n: Math.floor(n / 3600)})
-    return t('clients.uptimeDays', {n: Math.floor(n / 86400)})
-  }
-  if (n < 60) return t('clients.agoSecs', {n})
-  if (n < 3600) return t('clients.agoMins', {n: Math.floor(n / 60)})
-  if (n < 86400) return t('clients.agoHours', {n: Math.floor(n / 3600)})
-  return t('clients.agoDays', {n: Math.floor(n / 86400)})
-}
-
-function openDetail(runId: string) {
-  router.push({name: 'client-detail', params: {runId}})
-}
-
-function onKeyOpen(evt: KeyboardEvent, runId: string) {
+function onKeyOpen(evt: KeyboardEvent, sessionId: string) {
   if (evt.key === 'Enter' || evt.key === ' ') {
     evt.preventDefault()
-    openDetail(runId)
+    openDetail(sessionId)
   }
 }
 
-async function onKick(runId: string, evt: Event) {
+async function onKick(sessionId: string, evt: Event) {
   evt.stopPropagation()
   if (kicking.value) return
   if (!window.confirm(t('clients.kickConfirm'))) return
-  kicking.value = runId
+  kicking.value = sessionId
   try {
-    await kickClient(runId)
+    await kickClient(sessionId)
     await store.refresh()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -142,14 +120,14 @@ async function onKick(runId: string, evt: Event) {
 
     <article
         v-for="c in pageItems"
-        :key="c.runId"
+        :key="c.sessionId"
         class="client-card"
         :class="{ offline: !isOnline(c.status) }"
         role="button"
         tabindex="0"
         :aria-label="t('clients.detail')"
-        @click="openDetail(c.runId)"
-        @keydown="onKeyOpen($event, c.runId)"
+        @click="openDetail(c.sessionId)"
+        @keydown="onKeyOpen($event, c.sessionId)"
     >
       <div class="client-left">
         <div class="os-avatar" :class="{ online: isOnline(c.status) }" aria-hidden="true">
@@ -159,12 +137,12 @@ async function onKick(runId: string, evt: Event) {
 
         <div class="client-body">
           <div class="client-title">
-            <h3 class="client-id">{{ c.runId }}</h3>
+            <h3 class="client-id">{{ c.sessionId }}</h3>
             <span v-if="c.hostname" class="tag">{{ c.hostname }}</span>
             <span v-if="c.user" class="tag">{{ c.user }}</span>
             <span v-if="c.version" class="tag version">v{{ c.version }}</span>
             <span class="tag soft">
-              {{ t('clients.proxies') }} {{ c.proxyCount ?? 0 }}
+              {{ t('clients.tunnels') }} {{ c.tunnelCount ?? 0 }}
             </span>
           </div>
           <div class="client-meta">
@@ -174,9 +152,7 @@ async function onKick(runId: string, evt: Event) {
             </span>
             <OsBadge :os="c.os" :arch="c.arch" text-only/>
             <span class="seen">
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M2 12V8.5M5.5 12V5M9 12V7M12.5 12V3.5"/>
-              </svg>
+              <span class="seen-icon" aria-hidden="true" v-html="signalIcon"/>
               {{ formatSeen(c.connectedSecs, isOnline(c.status)) }}
             </span>
           </div>
@@ -188,10 +164,10 @@ async function onKick(runId: string, evt: Event) {
             v-if="isOnline(c.status)"
             type="button"
             class="kick-btn"
-            :disabled="kicking === c.runId"
+            :disabled="kicking === c.sessionId"
             :title="t('clients.kick')"
             :aria-label="t('clients.kick')"
-            @click="onKick(c.runId, $event)"
+            @click="onKick(c.sessionId, $event)"
         >
           <AppIcon name="kick"/>
         </button>
@@ -439,15 +415,23 @@ async function onKick(runId: string, evt: Event) {
   gap: 0.3rem;
 }
 
-.seen svg {
-  width: 0.85rem;
-  height: 0.85rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.seen-icon {
+  width: 0.82rem;
+  height: 0.82rem;
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+  color: inherit;
   opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.seen-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+  stroke: none;
 }
 
 .client-right {
