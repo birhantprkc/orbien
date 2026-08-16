@@ -73,9 +73,9 @@ listen = "0.0.0.0:9527"
 server = "127.0.0.1:9527"
 
 [[tunnels]]
-name = "mysql"
+name = "ssh"
 protocol = "tcp"
-service = "127.0.0.1:3306"
+service = "127.0.0.1:22"
 remotePort = 9000
 ```
 

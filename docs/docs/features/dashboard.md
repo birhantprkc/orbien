@@ -34,18 +34,3 @@ password = "123456"
 | `dashboard.user`      | 否  |             | Basic Auth 用户名       |
 | `dashboard.password`  | 否  |             | Basic Auth 密码        |
 | `dashboard.staticDir` | 否  |             | 静态资源目录；空则使用内置前端      |
-
-## 命令行
-
-无配置文件时也可用参数开启：
-
-```shell
-./orbien-server --dashboard_port 8020 --dashboard_user admin --dashboard_pwd 123456
-```
-
-| 参数                 | 默认值       | 说明          |
-|--------------------|-----------|-------------|
-| `--dashboard_addr` | `0.0.0.0` | 监听地址        |
-| `--dashboard_port` | `0`       | 监听端口；`0` 关闭 |
-| `--dashboard_user` | `admin`   | 用户名         |
-| `--dashboard_pwd`  | `admin`   | 密码          |

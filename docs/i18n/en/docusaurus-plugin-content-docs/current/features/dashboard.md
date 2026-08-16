@@ -34,18 +34,3 @@ Open `http://SERVER_IP:8020` in a browser and log in with Basic Auth (`user` / `
 | `dashboard.user`        | No       |               | Basic Auth username                          |
 | `dashboard.password`    | No       |               | Basic Auth password                          |
 | `dashboard.staticDir`   | No       |               | Static assets directory; empty uses the built-in frontend |
-
-## Command line
-
-You can also enable it with flags when there is no config file:
-
-```shell
-./orbien-server --dashboard_port 8020 --dashboard_user admin --dashboard_pwd 123456
-```
-
-| Flag               | Default     | Description                    |
-|--------------------|-------------|--------------------------------|
-| `--dashboard_addr` | `0.0.0.0`   | Listen address                 |
-| `--dashboard_port` | `0`         | Listen port; `0` disables it   |
-| `--dashboard_user` | `admin`     | Username                       |
-| `--dashboard_pwd`  | `admin`     | Password                       |

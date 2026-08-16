@@ -26,7 +26,6 @@ type Row = {
     noteId: NoteId;
 };
 
-/** Must match what `.github/workflows/release.yml` actually uploads. */
 const RELEASE_BUILDS: ReadonlySet<string> = new Set([
     'orbien-server|linux|amd64|gnu',
     'orbien-server|linux|amd64|musl',
@@ -49,7 +48,9 @@ const RELEASE_BUILDS: ReadonlySet<string> = new Set([
     'orbien|freebsd|amd64',
 
     'orbien-desktop|linux|amd64|gnu',
+    'orbien-desktop|linux|arm64|gnu',
     'orbien-desktop|windows|amd64',
+    'orbien-desktop|windows|arm64',
     'orbien-desktop|darwin|amd64',
     'orbien-desktop|darwin|arm64',
 ]);
