@@ -7,11 +7,11 @@ import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class RunIdStore {
-    private static final Logger log = LoggerFactory.getLogger(RunIdStore.class);
+final class SessionIdStore {
+    private static final Logger log = LoggerFactory.getLogger(SessionIdStore.class);
 
-    static final String DEFAULT_FILE = ".orbien.run_id";
-    private RunIdStore() {}
+    static final String DEFAULT_FILE = ".orbien.session_id";
+    private SessionIdStore() {}
 
     static Path defaultPath() {
         return Path.of(DEFAULT_FILE);
@@ -37,13 +37,13 @@ final class RunIdStore {
             }
             return s;
         } catch (IOException e) {
-            log.warn("failed to load runId from {}: {}", path, e.toString());
+            log.warn("failed to load sessionId from {}: {}", path, e.toString());
             return "";
         }
     }
 
-    static void save(Path path, String runId) {
-        if (path == null || runId == null || runId.isBlank()) {
+    static void save(Path path, String sessionId) {
+        if (path == null || sessionId == null || sessionId.isBlank()) {
             return;
         }
         try {
@@ -51,9 +51,9 @@ final class RunIdStore {
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            Files.writeString(path, runId, StandardCharsets.UTF_8);
+            Files.writeString(path, sessionId, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            log.warn("failed to persist runId to {}: {}", path, e.toString());
+            log.warn("failed to persist sessionId to {}: {}", path, e.toString());
         }
     }
 }

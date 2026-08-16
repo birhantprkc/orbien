@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class NewProxyResp {
-    public String proxyName = "";
-    public String remoteAddr = "";
-    public String error = "";
+public class NewDataConn {
+    public String sessionId = "";
+    public String authDigest = "";
+    public long timestamp;
 }

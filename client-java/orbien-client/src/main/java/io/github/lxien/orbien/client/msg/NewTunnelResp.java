@@ -4,4 +4,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class ReqWorkConn {}
+public class NewTunnelResp {
+    public String tunnelName = "";
+    public String remoteAddr = "";
+    public String error = "";
+}
