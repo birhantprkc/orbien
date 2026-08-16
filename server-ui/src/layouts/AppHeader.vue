@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {RouterLink} from 'vue-router'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 import {useLocale} from '@/composables/useLocale'
@@ -29,12 +30,12 @@ const {isMobile, mobileOpen, toggleCollapsed} = useSidebar()
         </svg>
       </button>
 
-      <div class="brand-block">
+      <RouterLink to="/" class="brand-block" :aria-label="t('nav.monitor')">
         <img class="logo-img" :src="logoUrl" alt="Orbien"/>
-        <div class="brand-title" aria-label="Orbien">
+        <div class="brand-title" aria-hidden="true">
           <span class="brand-orb">Orb</span><span class="brand-rest">ien</span>
         </div>
-      </div>
+      </RouterLink>
     </div>
 
     <div class="actions">

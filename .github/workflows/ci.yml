@@ -7,15 +7,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: "1.88"
+  RUST_VERSION: "1.92"
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
@@ -27,12 +29,14 @@ jobs:
           npm ci
           npm run build
 
-      - uses: dtolnay/rust-toolchain@master
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: fmt
         run: cargo fmt --all -- --check
@@ -43,5 +47,5 @@ jobs:
       - name: test
         run: cargo test --workspace --locked
 
-      - name: build release bins
+      - name: Build release bins
         run: cargo build --release --locked -p orbien-server -p orbien-client

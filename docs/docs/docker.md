@@ -11,19 +11,18 @@ title: Docker 安装
 准备 `orbien-server.toml`：
 
 ```toml
-bindAddr = "0.0.0.0"
-bindPort = 9527
+listen = "0.0.0.0:9527"
 
-# 可选：虚拟主机
-# vhostHTTPPort = 80
-# vhostHTTPSPort = 443
+# 可选 通过域名路由
+# httpGwPort = 80
+# httpsGwPort = 443
 
 # 可选：客户端鉴权
 # [auth]
 # token = "YOUR_TOKEN"
 
 # 可选：Web 管理面板
-[webServer]
+[dashboard]
 addr = "0.0.0.0"
 port = 8020
 user = "admin"
@@ -31,7 +30,7 @@ password = "123456"
 ```
 
 :::warning
-`webServer.addr` 需为 `0.0.0.0`，否则宿主机无法通过端口映射访问管理面板
+`dashboard.addr` 需为 `0.0.0.0`，否则宿主机无法通过端口映射访问管理面板
 :::
 
 ### 方式一：配置文件启动
@@ -75,19 +74,17 @@ docker compose up -d
 准备 `orbien.toml`：
 
 ```toml
-serverAddr = "YOUR_SERVER_IP"
-serverPort = 9527
+server = "YOUR_SERVER_IP:9527"
 
 # 若服务端开启了 Token，需保持一致
 # [auth]
 # token = "YOUR_TOKEN"
 
-[[proxies]]
+[[tunnels]]
 name = "mysql"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 3306
-remotePort = 6050
+protocol = "tcp"
+service = "127.0.0.1:3306"
+remotePort = 9000
 ```
 
 ### 方式一：配置文件启动
@@ -99,7 +96,7 @@ docker run -d --name orbien --restart unless-stopped \
 ```
 
 :::tip
-容器内 `127.0.0.1` 是容器自己。若要穿透**宿主机**上的服务，把 `localIP` 改成宿主机 IP，或使用下方 host 网络
+容器内 `127.0.0.1` 是容器自己。若要穿透**宿主机**上的服务，把 `service` 改成宿主机 IP，或使用下方 host 网络
 :::
 
 **host 网络**
@@ -130,4 +127,3 @@ services:
 ```shell
 docker compose up -d
 ```
-

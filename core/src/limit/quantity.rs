@@ -1,19 +1,24 @@
 use anyhow::{bail, Result};
 
-pub const KB: u64 = 1024;
-pub const MB: u64 = 1024 * 1024;
+pub fn mbps_to_bytes_per_sec(mbps: f64) -> u64 {
+    if mbps <= 0.0 || !mbps.is_finite() {
+        return 0;
+    }
+    (mbps * 1_000_000.0 / 8.0).round() as u64
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BandwidthLimitMode {
+pub enum BandwidthLimitSide {
     Client,
     Server,
 }
 
-impl BandwidthLimitMode {
+impl BandwidthLimitSide {
     pub fn parse(s: &str) -> Self {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "server" => Self::Server,
-            _ => Self::Client,
+        if s.trim().eq_ignore_ascii_case("server") {
+            Self::Server
+        } else {
+            Self::Client
         }
     }
 
@@ -25,18 +30,16 @@ impl BandwidthLimitMode {
     }
 }
 
-pub fn parse_bandwidth_limit(s: &str) -> Result<u64> {
-    let s = s.trim();
+pub fn parse_bandwidth_mbps(raw: &str) -> Result<f64> {
+    let s = raw.trim();
     if s.is_empty() {
-        return Ok(0);
+        return Ok(0.0);
     }
-    if let Some(num) = s.strip_suffix("MB").or_else(|| s.strip_suffix("mb")) {
-        let f: f64 = num.trim().parse()?;
-        return Ok((f * MB as f64) as u64);
+    let n: f64 = s
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid bandwidth (Mbps number expected), got {s:?}"))?;
+    if !n.is_finite() || n < 0.0 {
+        bail!("invalid bandwidth value: {s:?}");
     }
-    if let Some(num) = s.strip_suffix("KB").or_else(|| s.strip_suffix("kb")) {
-        let f: f64 = num.trim().parse()?;
-        return Ok((f * KB as f64) as u64);
-    }
-    bail!("bandwidthLimit unit not supported (use KB or MB), got {s:?}");
+    Ok(n)
 }

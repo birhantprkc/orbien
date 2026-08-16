@@ -4,14 +4,14 @@ mod routes;
 use crate::service::Service;
 use anyhow::Result;
 use axum::middleware;
-use orbien_core::config::WebServerConfig;
+use orbien_core::config::DashboardConfig;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub async fn run(svc: Arc<Service>, cfg: WebServerConfig) -> Result<()> {
+pub async fn run(svc: Arc<Service>, cfg: DashboardConfig) -> Result<()> {
     let addr = format!("{}:{}", cfg.addr, cfg.port);
     let listener = TcpListener::bind(&addr).await?;
-    tracing::info!(%addr, user = %cfg.user, "webServer dashboard listening");
+    tracing::info!(%addr, user = %cfg.user, "dashboard listening");
 
     let state = Arc::new(DashState { svc, cfg });
     let app = routes::router(state.clone())
@@ -25,5 +25,5 @@ pub async fn run(svc: Arc<Service>, cfg: WebServerConfig) -> Result<()> {
 #[derive(Clone)]
 pub struct DashState {
     pub svc: Arc<Service>,
-    pub cfg: WebServerConfig,
+    pub cfg: DashboardConfig,
 }

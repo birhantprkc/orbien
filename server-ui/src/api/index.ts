@@ -4,8 +4,8 @@ export {
     fetchClients,
     fetchClient,
     kickClient,
-    fetchProxies,
-    fetchProxyTraffic,
+    fetchTunnels,
+    fetchTunnelTraffic,
     fetchSystemTraffic,
 } from './client'
-export type {ProxyListParams, TrafficRange} from './client'
+export type {TunnelListParams, TrafficRange} from './client'

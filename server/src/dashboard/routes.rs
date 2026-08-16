@@ -1,14 +1,14 @@
 use super::model::{
-    ApiResponse, ClientInfo, Page, ProxyInfo, ProxyTrafficPoint, ProxyTrafficResp, SystemConfig,
+    ApiResponse, ClientInfo, Page, TunnelInfo, TunnelTrafficPoint, TunnelTrafficResp, SystemConfig,
     SystemInfo, SystemStatus,
 };
 use super::DashState;
-use crate::metrics::{ProxyTrafficHistory, TrafficWindow};
+use crate::metrics::{TunnelTrafficHistory, TrafficWindow};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, Request, StatusCode};
 use axum::middleware::Next;
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine;
@@ -27,27 +27,15 @@ pub fn router(state: Arc<DashState>) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .route("/", get(index_html))
         .route("/favicon.ico", get(favicon))
-        .route("/static", get(|| async { Redirect::permanent("/") }))
-        .route("/static/", get(|| async { Redirect::permanent("/") }))
-        .route("/static/{*path}", get(redirect_legacy_static))
         .route("/api/v1/system/info", get(system_info))
         .route("/api/v1/system/traffic", get(system_traffic))
         .route("/api/v1/clients", get(list_clients))
-        .route("/api/v1/clients/{run_id}", get(get_client))
-        .route("/api/v1/clients/{run_id}/kick", post(kick_client))
-        .route("/api/v1/proxies", get(list_proxies))
-        .route("/api/v1/proxies/{name}/traffic", get(proxy_traffic))
+        .route("/api/v1/clients/{session_id}", get(get_client))
+        .route("/api/v1/clients/{session_id}/kick", post(kick_client))
+        .route("/api/v1/tunnels", get(list_tunnels))
+        .route("/api/v1/tunnels/{name}/traffic", get(tunnel_traffic))
         .route("/{*path}", get(static_file))
         .with_state(state)
-}
-
-async fn redirect_legacy_static(Path(path): Path<String>) -> Redirect {
-    let rel = path.trim_start_matches('/');
-    if rel.is_empty() {
-        Redirect::permanent("/")
-    } else {
-        Redirect::permanent(&format!("/{rel}"))
-    }
 }
 
 pub async fn basic_auth(
@@ -99,14 +87,14 @@ fn authorized(state: &DashState, headers: &HeaderMap) -> bool {
 }
 
 async fn index_html(State(state): State<Arc<DashState>>) -> Response {
-    if let Some(bytes) = load_override(&state.cfg.assets_dir, "index.html") {
+    if let Some(bytes) = load_override(&state.cfg.static_dir, "index.html") {
         return bytes_response("text/html; charset=utf-8", bytes);
     }
     serve_asset("index.html")
 }
 
 async fn favicon(State(state): State<Arc<DashState>>) -> Response {
-    if let Some(bytes) = load_override(&state.cfg.assets_dir, "favicon.ico") {
+    if let Some(bytes) = load_override(&state.cfg.static_dir, "favicon.ico") {
         return bytes_response("image/x-icon", bytes);
     }
     if let Some(res) = try_embedded("favicon.ico") {
@@ -117,7 +105,7 @@ async fn favicon(State(state): State<Arc<DashState>>) -> Response {
 
 async fn static_file(State(state): State<Arc<DashState>>, Path(path): Path<String>) -> Response {
     let rel = path.trim_start_matches('/');
-    if let Some(bytes) = load_override(&state.cfg.assets_dir, rel) {
+    if let Some(bytes) = load_override(&state.cfg.static_dir, rel) {
         return bytes_response(content_type(rel), bytes);
     }
 
@@ -169,15 +157,15 @@ fn traffic_window(q: &TrafficQuery) -> TrafficWindow {
     TrafficWindow::parse(&q.range)
 }
 
-fn traffic_resp(hist: ProxyTrafficHistory) -> ProxyTrafficResp {
-    ProxyTrafficResp {
+fn traffic_resp(hist: TunnelTrafficHistory) -> TunnelTrafficResp {
+    TunnelTrafficResp {
         name: hist.name,
         unit: hist.unit,
         granularity: hist.granularity,
         history: hist
             .history
             .into_iter()
-            .map(|p| ProxyTrafficPoint {
+            .map(|p| TunnelTrafficPoint {
                 date: p.date,
                 traffic_in: p.traffic_in,
                 traffic_out: p.traffic_out,
@@ -191,16 +179,15 @@ async fn system_info(State(state): State<Arc<DashState>>) -> Json<ApiResponse<Sy
     Json(ApiResponse::ok(SystemInfo {
         version: VERSION.to_string(),
         config: SystemConfig {
-            bind_addr: state.svc.cfg().bind_addr.clone(),
-            bind_port: state.svc.cfg().bind_port,
-            quic_bind_port: state.svc.cfg().quic_bind_port,
-            kcp_bind_port: state.svc.cfg().kcp_bind_port,
-            vhost_http_port: state.svc.cfg().vhost_http_port,
-            vhost_https_port: state.svc.cfg().vhost_https_port,
-            sub_domain_host: state.svc.cfg().sub_domain_host.clone(),
+            listen: state.svc.cfg().listen.clone(),
+            quic_port: state.svc.cfg().quic_port,
+            kcp_port: state.svc.cfg().kcp_port,
+            http_gw_port: state.svc.cfg().http_gw_port,
+            https_gw_port: state.svc.cfg().https_gw_port,
+            root_domain: state.svc.cfg().root_domain.clone(),
             tcp_mux: state.svc.cfg().transport.tcp_mux,
             tls_force: state.svc.cfg().transport.tls.force,
-            max_pool_count: state.svc.cfg().transport.max_pool_count,
+            max_conn_pool: state.svc.cfg().transport.max_conn_pool,
             heartbeat_timeout: state.svc.cfg().transport.heartbeat_timeout,
         },
         status: SystemStatus {
@@ -210,8 +197,8 @@ async fn system_info(State(state): State<Arc<DashState>>) -> Json<ApiResponse<Sy
                 .filter(|c| c.status.is_empty() || c.status == "online")
                 .count(),
             total_client_counts: snap.total_client_counts,
-            proxy_type_count: snap.proxy_type_count,
-            cur_conns: snap.cur_conns,
+            tunnel_type_count: snap.tunnel_type_count,
+            active_conns: snap.active_conns,
             total_traffic_in: snap.total_traffic_in,
             total_traffic_out: snap.total_traffic_out,
         },
@@ -221,7 +208,7 @@ async fn system_info(State(state): State<Arc<DashState>>) -> Json<ApiResponse<Sy
 async fn system_traffic(
     State(state): State<Arc<DashState>>,
     Query(q): Query<TrafficQuery>,
-) -> Json<ApiResponse<ProxyTrafficResp>> {
+) -> Json<ApiResponse<TunnelTrafficResp>> {
     let hist = state.svc.metrics().server_traffic(traffic_window(&q));
     Json(ApiResponse::ok(traffic_resp(hist)))
 }
@@ -250,11 +237,11 @@ async fn list_clients(
 
 async fn get_client(
     State(state): State<Arc<DashState>>,
-    Path(run_id): Path<String>,
+    Path(session_id): Path<String>,
 ) -> Result<Json<ApiResponse<ClientInfo>>, StatusCode> {
-    let run_id = urlencoding_decode(&run_id);
+    let session_id = urlencoding_decode(&session_id);
     let snap = state.svc.dashboard_snapshot().await;
-    match snap.clients.into_iter().find(|c| c.run_id == run_id) {
+    match snap.clients.into_iter().find(|c| c.session_id == session_id) {
         Some(c) => Ok(Json(ApiResponse::ok(c))),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -262,10 +249,10 @@ async fn get_client(
 
 async fn kick_client(
     State(state): State<Arc<DashState>>,
-    Path(run_id): Path<String>,
+    Path(session_id): Path<String>,
 ) -> Json<ApiResponse<()>> {
-    let run_id = urlencoding_decode(&run_id);
-    match state.svc.kick_client(&run_id).await {
+    let session_id = urlencoding_decode(&session_id);
+    match state.svc.kick_client(&session_id).await {
         Ok(()) => Json(ApiResponse::ok(())),
         Err(e) => Json(ApiResponse {
             code: 404,
@@ -276,30 +263,30 @@ async fn kick_client(
 }
 
 #[derive(Deserialize)]
-struct ProxyListQuery {
+struct TunnelListQuery {
     #[serde(default = "default_page")]
     page: usize,
     #[serde(default = "default_page_size", rename = "pageSize")]
     page_size: usize,
-    #[serde(default, rename = "clientId")]
-    client_id: String,
+    #[serde(default, rename = "sessionId")]
+    session_id: String,
     #[serde(default)]
     q: String,
 }
 
-async fn list_proxies(
+async fn list_tunnels(
     State(state): State<Arc<DashState>>,
-    Query(q): Query<ProxyListQuery>,
-) -> Json<ApiResponse<Page<ProxyInfo>>> {
+    Query(q): Query<TunnelListQuery>,
+) -> Json<ApiResponse<Page<TunnelInfo>>> {
     let page = q.page.max(1);
     let page_size = q.page_size.clamp(1, 200);
     let snap = state.svc.dashboard_snapshot().await;
-    let client_id = q.client_id.trim();
+    let session_id = q.session_id.trim();
     let needle = q.q.trim().to_ascii_lowercase();
-    let filtered: Vec<ProxyInfo> = snap
-        .proxies
+    let filtered: Vec<TunnelInfo> = snap
+        .tunnels
         .into_iter()
-        .filter(|p| client_id.is_empty() || p.client_id == client_id)
+        .filter(|p| session_id.is_empty() || p.session_id == session_id)
         .filter(|p| needle.is_empty() || p.name.to_ascii_lowercase().contains(&needle))
         .collect();
     let total = filtered.len();
@@ -312,13 +299,13 @@ async fn list_proxies(
     }))
 }
 
-async fn proxy_traffic(
+async fn tunnel_traffic(
     State(state): State<Arc<DashState>>,
     Path(name): Path<String>,
     Query(q): Query<TrafficQuery>,
-) -> Result<Json<ApiResponse<ProxyTrafficResp>>, StatusCode> {
+) -> Result<Json<ApiResponse<TunnelTrafficResp>>, StatusCode> {
     let name = urlencoding_decode(&name);
-    match state.svc.metrics().proxy_traffic(&name, traffic_window(&q)) {
+    match state.svc.metrics().tunnel_traffic(&name, traffic_window(&q)) {
         Some(hist) => Ok(Json(ApiResponse::ok(traffic_resp(hist)))),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -362,11 +349,11 @@ fn from_hex(b: u8) -> Option<u8> {
     }
 }
 
-fn load_override(assets_dir: &str, rel: &str) -> Option<Vec<u8>> {
-    if assets_dir.trim().is_empty() {
+fn load_override(static_dir: &str, rel: &str) -> Option<Vec<u8>> {
+    if static_dir.trim().is_empty() {
         return None;
     }
-    let path = safe_join(FsPath::new(assets_dir), rel)?;
+    let path = safe_join(FsPath::new(static_dir), rel)?;
     std::fs::read(path).ok()
 }
 

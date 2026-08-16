@@ -16,7 +16,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: "1.88"
+  RUST_VERSION: "1.92"
 
 jobs:
   meta:
@@ -24,10 +24,18 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - id: ver
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            V="${{ inputs.version }}"
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            V="$INPUT_VERSION"
           else
             V="${GITHUB_REF_NAME#v}"
           fi
@@ -35,8 +43,14 @@ jobs:
             echo "version is empty" >&2
             exit 1
           fi
+          CARGO_V="$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['workspace']['package']['version'])")"
+          if [ "$CARGO_V" != "$V" ]; then
+            echo "version mismatch: release=$V workspace=$CARGO_V" >&2
+            echo "update [workspace.package] version in Cargo.toml before tagging/releasing" >&2
+            exit 1
+          fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "Release version: $V"
+          echo "Release version: $V (matches Cargo workspace)"
 
   build-cli:
     needs: meta
@@ -82,9 +96,11 @@ jobs:
             goarch: arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
@@ -102,12 +118,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
-      - uses: dtolnay/rust-toolchain@master
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
         with:
           key: cli-${{ matrix.target }}
 
@@ -130,7 +148,9 @@ jobs:
           TARGET="${{ matrix.target }}"
           OUT="dist/release"
           EXT=""
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then EXT=".exe"; fi
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            EXT=".exe"
+          fi
           BIN_DIR="target/${TARGET}/release"
           LIBC="${{ matrix.libc }}"
 
@@ -162,12 +182,13 @@ jobs:
 
           pack_one orbien-server \
             "${BIN_DIR}/orbien-server${EXT}" \
-            pack/conf/orbien-server.toml
+            conf/orbien-server.toml
           pack_one orbien \
             "${BIN_DIR}/orbien${EXT}" \
-            pack/conf/orbien.toml
+            conf/orbien.toml
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.target }}
           path: dist/release/*.tar.gz
@@ -177,9 +198,11 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
@@ -211,22 +234,12 @@ jobs:
             fi
             . "$HOME/.cargo/env"
             rustup default "${RUST_VERSION}"
-            rustup show
-            rustc --version
-            cargo --version
-            command -v bash
           run: |
-            set -ex
+            set -euo pipefail
             export PATH="$HOME/.cargo/bin:/usr/local/bin:$PATH"
             if [ -f "$HOME/.cargo/env" ]; then
               . "$HOME/.cargo/env"
             fi
-            echo "VERSION=${VERSION:-}"
-            echo "RUST_VERSION=${RUST_VERSION:-}"
-            command -v cargo
-            command -v bash
-            rustc --version
-            cargo --version
 
             cargo build --release --locked -p orbien-server -p orbien-client
             ./target/release/orbien-server --help >/dev/null
@@ -241,7 +254,7 @@ jobs:
               --arch amd64 \
               --outdir "$OUT" \
               --bin target/release/orbien-server \
-              --config pack/conf/orbien-server.toml
+              --config conf/orbien-server.toml
             bash scripts/pack-release.sh \
               --name orbien \
               --version "$VERSION" \
@@ -249,13 +262,14 @@ jobs:
               --arch amd64 \
               --outdir "$OUT" \
               --bin target/release/orbien \
-              --config pack/conf/orbien.toml
+              --config conf/orbien.toml
             ls -lh "$OUT"
         env:
           RUST_VERSION: ${{ env.RUST_VERSION }}
           VERSION: ${{ needs.meta.outputs.version }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload FreeBSD CLI artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: cli-freebsd-amd64
           path: dist/release/*.tar.gz
@@ -268,315 +282,108 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
             goos: linux
             goarch: amd64
+            artifact: deb
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
             goos: linux
             goarch: arm64
+            artifact: deb
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
             goos: windows
             goarch: amd64
+            artifact: windows
           - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
             goos: windows
             goarch: arm64
+            artifact: windows
           - os: macos-15-intel
-            target: x86_64-apple-darwin
             goos: darwin
             goarch: amd64
+            artifact: dmg
           - os: macos-14
-            target: aarch64-apple-darwin
             goos: darwin
             goarch: arm64
+            artifact: dmg
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          toolchain: ${{ env.RUST_VERSION }}
 
-      - name: Install Linux Tauri dependencies
-        if: runner.os == 'Linux'
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-${{ matrix.os }}-${{ matrix.goarch }}
+
+      - name: Install Linux GUI deps
+        if: matrix.artifact == 'deb'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf libssl-dev \
-            fakeroot
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            libfontconfig1-dev
 
-      - name: Install WiX
-        if: runner.os == 'Windows'
+      - name: Build orbien-desktop
+        shell: bash
+        run: cargo build --release --locked -p orbien-desktop
+
+      - name: Package macOS DMG
+        if: matrix.artifact == 'dmg'
         shell: bash
         run: |
-          choco install wixtoolset -y --no-progress
-          echo "C:/Program Files (x86)/WiX Toolset v3.14/bin" >> "$GITHUB_PATH"
-          echo "C:/Program Files (x86)/WiX Toolset v3.11/bin" >> "$GITHUB_PATH"
+          chmod +x scripts/pack-desktop-macos.sh
+          ./scripts/pack-desktop-macos.sh \
+            --version "${{ needs.meta.outputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
 
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            . -> target
-            desktop/src-tauri -> target
-          key: desktop-${{ matrix.target }}
-
-      - name: Install npm deps
-        working-directory: desktop
-        run: npm ci
-
-      - name: Build orbien CLI sidecar
-        shell: bash
-        env:
-          CI: "true"
-        run: |
-          set -euo pipefail
-          chmod +x scripts/prepare-desktop-sidecar.sh
-          TARGET="${{ matrix.target }}"
-          ./scripts/prepare-desktop-sidecar.sh "$TARGET"
-          EXT=""
-          case "$TARGET" in *windows*) EXT=".exe" ;; esac
-          SIDE="desktop/src-tauri/binaries/orbien-${TARGET}${EXT}"
-          if [[ ! -f "$SIDE" ]]; then
-            echo "missing sidecar for Tauri externalBin: $SIDE" >&2
-            ls -la desktop/src-tauri/binaries/ || true
-            exit 1
-          fi
-          ls -lh "$SIDE"
-
-      - name: Sync desktop version
+      - name: Package Windows EXE + ZIP
+        if: matrix.artifact == 'windows'
         shell: bash
         run: |
-          set -euo pipefail
-          export VERSION="${{ needs.meta.outputs.version }}"
-          BUNDLE_VERSION="$(node <<'EOF'
-          const v = process.env.VERSION || "";
-          const m = v.match(/^(\d+\.\d+\.\d+)(?:-([0-9A-Za-z.-]+))?$/);
-          if (!m) { console.log(v); process.exit(0); }
-          const core = m[1];
-          const pre = m[2];
-          if (!pre) { console.log(core); process.exit(0); }
-          if (/^\d+$/.test(pre)) {
-            const n = Number(pre);
-            console.log(n > 65535 ? core : `${core}-${pre}`);
-            process.exit(0);
-          }
-          const num = pre.match(/(\d+)$/);
-          if (num) {
-            const n = Number(num[1]);
-            console.log(n > 65535 ? core : `${core}-${n}`);
-            process.exit(0);
-          }
-          console.log(core);
-          EOF
-          )"
-          export BUNDLE_VERSION
-          echo "release tag version: ${VERSION}"
-          echo "bundle version (msi-safe): ${BUNDLE_VERSION}"
+          chmod +x scripts/pack-desktop-windows.sh
+          ./scripts/pack-desktop-windows.sh \
+            --bin target/release/orbien-desktop.exe \
+            --version "${{ needs.meta.outputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
 
-          node <<'EOF'
-          const fs = require("fs");
-          for (const p of [
-            "desktop/src-tauri/tauri.conf.json",
-            "desktop/package.json",
-          ]) {
-            const j = JSON.parse(fs.readFileSync(p, "utf8"));
-            j.version = process.env.BUNDLE_VERSION;
-            fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
-          }
-          EOF
-          sed -i.bak -E "s/^version = \".*\"/version = \"${BUNDLE_VERSION}\"/" desktop/src-tauri/Cargo.toml
-          rm -f desktop/src-tauri/Cargo.toml.bak
-
-      - name: Configure Apple code signing
-        if: runner.os == 'macOS'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          if [ -z "${APPLE_CERTIFICATE}" ]; then
-            echo "APPLE_CERTIFICATE not configured — ad-hoc signing (signingIdentity=-)"
-            exit 0
-          fi
-
-          CERT_PATH="$RUNNER_TEMP/apple-cert.p12"
-          if ! echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH" 2>/dev/null; then
-            echo "::error::APPLE_CERTIFICATE is not valid base64. Export with: base64 -i DeveloperID.p12 | pbcopy"
-            exit 1
-          fi
-          if [[ ! -s "$CERT_PATH" ]]; then
-            echo "::error::APPLE_CERTIFICATE decoded to an empty file"
-            exit 1
-          fi
-          echo "APPLE_CERTIFICATE decoded OK ($(wc -c < "$CERT_PATH") bytes)"
-          rm -f "$CERT_PATH"
-
-          {
-            echo "APPLE_CERTIFICATE<<ORB_CERT_EOF"
-            printf '%s\n' "$APPLE_CERTIFICATE"
-            echo "ORB_CERT_EOF"
-            echo "APPLE_CERTIFICATE_PASSWORD<<ORB_PASS_EOF"
-            printf '%s\n' "${APPLE_CERTIFICATE_PASSWORD:-}"
-            echo "ORB_PASS_EOF"
-          } >> "$GITHUB_ENV"
-
-          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-            {
-              echo "APPLE_SIGNING_IDENTITY<<ORB_ID_EOF"
-              printf '%s\n' "$APPLE_SIGNING_IDENTITY"
-              echo "ORB_ID_EOF"
-            } >> "$GITHUB_ENV"
-          fi
-
-          node <<'EOF'
-          const fs = require("fs");
-          const p = "desktop/src-tauri/tauri.conf.json";
-          const j = JSON.parse(fs.readFileSync(p, "utf8"));
-          if (j.bundle?.macOS?.signingIdentity === "-") {
-            delete j.bundle.macOS.signingIdentity;
-            fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
-            console.log("cleared ad-hoc signingIdentity so Developer ID can be inferred");
-          }
-          EOF
-
-          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
-            {
-              echo "APPLE_ID<<ORB_AID_EOF"
-              printf '%s\n' "$APPLE_ID"
-              echo "ORB_AID_EOF"
-              echo "APPLE_PASSWORD<<ORB_APW_EOF"
-              printf '%s\n' "$APPLE_PASSWORD"
-              echo "ORB_APW_EOF"
-              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
-            } >> "$GITHUB_ENV"
-            echo "Notarization credentials exported"
-          else
-            echo "Developer ID cert exported; notarization secrets incomplete — skip notarization"
-          fi
-
-      - name: Build Tauri installers
-        working-directory: desktop
+      - name: Package Linux DEB
+        if: matrix.artifact == 'deb'
         shell: bash
         run: |
-          set -euo pipefail
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            if [ -n "${APPLE_CERTIFICATE:-}" ]; then
-              echo "macOS signing: Developer ID (APPLE_CERTIFICATE present)"
-            else
-              echo "macOS signing: ad-hoc (tauri.conf.json signingIdentity=-)"
-            fi
-          fi
-          npm run tauri -- build --target ${{ matrix.target }}
+          chmod +x scripts/pack-desktop-linux-deb.sh
+          ./scripts/pack-desktop-linux-deb.sh \
+            --version "${{ needs.meta.outputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
 
-      - name: Verify macOS app signature
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          TARGET="${{ matrix.target }}"
-          DMG_DIR="desktop/src-tauri/target/${TARGET}/release/bundle/dmg"
-          DMG="$(find "$DMG_DIR" -type f -name '*.dmg' | head -n 1 || true)"
-          if [[ -z "$DMG" || ! -f "$DMG" ]]; then
-            echo "No .dmg under $DMG_DIR" >&2
-            find "desktop/src-tauri/target/${TARGET}/release/bundle" -maxdepth 3 2>/dev/null || true
-            exit 1
-          fi
-          MOUNT="$(mktemp -d /tmp/orbien-dmg-XXXX)"
-          cleanup() { hdiutil detach "$MOUNT" -quiet 2>/dev/null || true; rm -rf "$MOUNT"; }
-          trap cleanup EXIT
-          hdiutil attach "$DMG" -mountpoint "$MOUNT" -nobrowse -readonly -quiet
-          APP="$(find "$MOUNT" -maxdepth 2 -name '*.app' -type d | head -n 1 || true)"
-          if [[ -z "$APP" || ! -d "$APP" ]]; then
-            echo "No .app inside DMG: $DMG" >&2
-            ls -la "$MOUNT" >&2 || true
-            exit 1
-          fi
-          echo "Verifying: $APP (from $DMG)"
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          codesign -dv --verbose=4 "$APP" 2>&1 | tee /tmp/orbien-codesign.txt
-          if grep -q 'Signature=adhoc\|Authority=Developer ID Application' /tmp/orbien-codesign.txt; then
-            echo "macOS code signature OK"
-          else
-            echo "WARNING: unexpected signature; Gatekeeper may report the app as damaged" >&2
-            cat /tmp/orbien-codesign.txt >&2
-          fi
-          SIDE="$(find "$APP/Contents/MacOS" -type f \( -name 'orbien' -o -name 'orbien-*' \) ! -name 'orbien-desktop' | head -n 1 || true)"
-          if [[ -z "$SIDE" ]]; then
-            SIDE="$(find "$APP/Contents/MacOS" -type f -name 'orbien' | head -n 1 || true)"
-          fi
-          if [[ -z "$SIDE" ]]; then
-            echo "missing orbien sidecar inside app bundle" >&2
-            ls -la "$APP/Contents/MacOS" >&2 || true
-            exit 1
-          fi
-          ls -lh "$APP/Contents/MacOS/"
-          file "$SIDE"
-
-      - name: Collect desktop installers
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ needs.meta.outputs.version }}"
-          TARGET="${{ matrix.target }}"
-          GOOS="${{ matrix.goos }}"
-          GOARCH="${{ matrix.goarch }}"
-          OUT="dist/release"
-          BUNDLE="desktop/src-tauri/target/${TARGET}/release/bundle"
-          mkdir -p "$OUT"
-
-          echo "Bundle tree:"
-          find "$BUNDLE" -type f 2>/dev/null | sort || true
-
-          case "$GOOS" in
-            darwin)  SUBDIR="dmg"; EXT="dmg" ;;
-            windows) SUBDIR="msi"; EXT="msi" ;;
-            linux)   SUBDIR="deb"; EXT="deb" ;;
-            *)
-              echo "unsupported goos: $GOOS" >&2
-              exit 1
-              ;;
-          esac
-
-          SRC="$(find "$BUNDLE/$SUBDIR" -type f -name "*.${EXT}" 2>/dev/null | head -n 1 || true)"
-          if [[ -z "$SRC" || ! -f "$SRC" ]]; then
-            echo "No .${EXT} installer found under ${BUNDLE}/${SUBDIR}" >&2
-            exit 1
-          fi
-
-          DEST="${OUT}/orbien-desktop_${VERSION}_${GOOS}_${GOARCH}.${EXT}"
-          cp "$SRC" "$DEST"
-          ls -lh "$DEST"
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            dist/release/*.dmg
-            dist/release/*.msi
-            dist/release/*.deb
+            dist/desktop/*.dmg
+            dist/desktop/*.zip
+            dist/desktop/*.exe
+            dist/desktop/*.deb
           if-no-files-found: error
 
   publish:
     needs: [meta, build-cli, build-cli-freebsd, build-desktop]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: "*"
@@ -596,8 +403,8 @@ jobs:
           files: |
             artifacts/*.tar.gz
             artifacts/*.dmg
-            artifacts/*.msi
+            artifacts/*.zip
+            artifacts/*.exe
             artifacts/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

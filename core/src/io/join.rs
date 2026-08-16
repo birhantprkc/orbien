@@ -8,7 +8,10 @@ where
     A: AsyncRead + AsyncWrite + Unpin,
     B: AsyncRead + AsyncWrite + Unpin,
 {
-    let (a_to_b, b_to_a, _err) = join_counted(a, b).await;
+    let (a_to_b, b_to_a, err) = join_counted(a, b).await;
+    if let Some(e) = err {
+        return Err(e);
+    }
     Ok((a_to_b, b_to_a))
 }
 

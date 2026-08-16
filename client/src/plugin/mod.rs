@@ -1,4 +1,4 @@
-mod https2http;
+mod tls_term;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -29,8 +29,8 @@ pub trait Plugin: Send + Sync {
 
 pub fn create(ctx: PluginContext, cfg: &PluginConfig) -> Result<Arc<dyn Plugin>> {
     match cfg.plugin_type.as_str() {
-        "https2http" => {
-            let p = https2http::Https2HttpPlugin::new(ctx, cfg)?;
+        "tls-term" => {
+            let p = tls_term::TlsTermPlugin::new(ctx, cfg)?;
             Ok(Arc::new(p))
         }
         other => bail!("unknown client plugin type: {other}"),

@@ -17,15 +17,11 @@ const {t} = useLocale()
 const trafficRange = ref<TrafficRange>('24h')
 const chartVariant = ref<'bar' | 'line'>('line')
 
-const PROXY_COLORS: Record<string, string> = {
+const TUNNEL_COLORS: Record<string, string> = {
   http: '#3b82f6',
   https: '#93c5fd',
   tcp: '#cbd5e1',
   udp: '#2dd4bf',
-  socks5: '#f97316',
-  file: '#fb7185',
-  stcp: '#a78bfa',
-  xtcp: '#f472b6',
 }
 
 const FALLBACK_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#818cf8', '#94a3b8']
@@ -41,19 +37,19 @@ const totalClients = computed(() =>
     Math.max(status.value?.totalClientCounts ?? 0, onlineClients.value),
 )
 
-const proxyTotal = computed(() => {
-  const m = status.value?.proxyTypeCount || {}
+const tunnelTotal = computed(() => {
+  const m = status.value?.tunnelTypeCount || {}
   return Object.values(m).reduce((a, b) => a + b, 0)
 })
 
 const chartSlices = computed<ChartSlice[]>(() => {
-  const m = status.value?.proxyTypeCount || {}
+  const m = status.value?.tunnelTypeCount || {}
   const entries = Object.entries(m).sort(([a], [b]) => a.localeCompare(b))
   return entries.map(([key, value], i) => ({
     key,
     label: key,
     value,
-    color: PROXY_COLORS[key.toLowerCase()] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]!,
+    color: TUNNEL_COLORS[key.toLowerCase()] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]!,
   }))
 })
 
@@ -77,53 +73,63 @@ const configFields = computed<ConfigField[]>(() => {
   const c = cfg.value
   if (!c) return []
 
-  const fields: ConfigField[] = [
-    {
-      key: 'listen',
-      label: t('monitor.bindAddr'),
-      type: 'raw',
-      value: `${c.bindAddr || '—'}:${c.bindPort ?? '—'}`,
-    },
-  ]
+  const fields: ConfigField[] = []
 
-  if (!isUnsetPort(c.kcpBindPort)) {
+  const version = store.info?.version?.trim()
+  if (version) {
+    fields.push({
+      key: 'version',
+      label: t('monitor.version'),
+      type: 'raw',
+      value: version,
+    })
+  }
+
+  fields.push({
+    key: 'listen',
+    label: t('monitor.listen'),
+    type: 'raw',
+    value: c.listen || '—',
+  })
+
+  if (!isUnsetPort(c.kcpPort)) {
     fields.push({
       key: 'kcp',
-      label: t('monitor.kcpBindPort'),
+      label: t('monitor.kcpPort'),
       type: 'port',
-      value: c.kcpBindPort,
+      value: c.kcpPort,
     })
   }
-  if (!isUnsetPort(c.quicBindPort)) {
+  if (!isUnsetPort(c.quicPort)) {
     fields.push({
       key: 'quic',
-      label: t('monitor.quicBindPort'),
+      label: t('monitor.quicPort'),
       type: 'port',
-      value: c.quicBindPort,
+      value: c.quicPort,
     })
   }
-  if (!isUnsetPort(c.vhostHTTPPort)) {
+  if (!isUnsetPort(c.httpGwPort)) {
     fields.push({
       key: 'http',
-      label: t('monitor.vhostHTTPPort'),
+      label: t('monitor.httpGwPort'),
       type: 'port',
-      value: c.vhostHTTPPort,
+      value: c.httpGwPort,
     })
   }
-  if (!isUnsetPort(c.vhostHTTPSPort)) {
+  if (!isUnsetPort(c.httpsGwPort)) {
     fields.push({
       key: 'https',
-      label: t('monitor.vhostHTTPSPort'),
+      label: t('monitor.httpsGwPort'),
       type: 'port',
-      value: c.vhostHTTPSPort,
+      value: c.httpsGwPort,
     })
   }
-  if (!isUnsetText(c.subDomainHost ?? '')) {
+  if (!isUnsetText(c.rootDomain ?? '')) {
     fields.push({
-      key: 'subdomain',
-      label: t('monitor.subDomainHost'),
+      key: 'rootDomain',
+      label: t('monitor.rootDomain'),
       type: 'text',
-      value: c.subDomainHost,
+      value: c.rootDomain,
     })
   }
 
@@ -142,13 +148,13 @@ const configFields = computed<ConfigField[]>(() => {
       },
       {
         key: 'pool',
-        label: t('monitor.metricMaxPool'),
+        label: t('monitor.maxConnPool'),
         type: 'raw',
-        value: c.maxPoolCount ?? 0,
+        value: c.maxConnPool ?? 0,
       },
       {
         key: 'heartbeat',
-        label: t('monitor.metricHeartbeat'),
+        label: t('monitor.heartbeatTimeout'),
         type: 'raw',
         value: formatHeartbeat(c.heartbeatTimeout),
       },
@@ -171,11 +177,11 @@ const descItems = computed<DescItem[]>(() =>
       <StatCard :label="t('overview.onlineClients')" icon="user" tone="green">
         {{ onlineClients }}
       </StatCard>
-      <StatCard :label="t('overview.proxies')" icon="proxies" tone="violet">
-        {{ proxyTotal }}
+      <StatCard :label="t('overview.tunnels')" icon="tunnels" tone="violet">
+        {{ tunnelTotal }}
       </StatCard>
       <StatCard :label="t('overview.connections')" icon="link" tone="orange">
-        {{ status?.curConns ?? 0 }}
+        {{ status?.activeConns ?? 0 }}
       </StatCard>
     </section>
 
@@ -187,7 +193,7 @@ const descItems = computed<DescItem[]>(() =>
         <TrafficSummary :traffic-in="trafficIn" :traffic-out="trafficOut"/>
       </SectionCard>
 
-      <SectionCard class="panel" :title="t('monitor.proxyDist')">
+      <SectionCard class="panel" :title="t('monitor.tunnelDist')">
         <DonutChart :slices="chartSlices"/>
       </SectionCard>
     </div>

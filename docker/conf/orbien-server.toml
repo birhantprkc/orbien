@@ -1,12 +1,13 @@
-bindAddr = "0.0.0.0"
-bindPort = 9527
+listen = "0.0.0.0:9527"
 
-#[auth]
-#method = "token"
-#token = "YOUR_TOKEN"
+# httpGwPort = 80
+# httpsGwPort = 443
+# rootDomain = "example.com"
 
-#[webServer]
+#auth.token = "YOUR_TOKEN"
+
+#[dashboard]
 #addr = "0.0.0.0"
-#port = 8020
+#port = 8020 
 #user = "admin"
 #password = "123456"
