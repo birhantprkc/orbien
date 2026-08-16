@@ -8,11 +8,15 @@ const V2_SIG: [u8; 12] = [
 ];
 
 pub fn parse_proxy_protocol_version(s: &str) -> Result<Option<&'static str>> {
-    match s.trim().to_ascii_lowercase().as_str() {
-        "" => Ok(None),
-        "v1" => Ok(Some("v1")),
-        "v2" => Ok(Some("v2")),
-        other => bail!("invalid proxyProtocolVersion {other:?}; use \"\" | \"v1\" | \"v2\""),
+    let s = s.trim();
+    if s.is_empty() {
+        Ok(None)
+    } else if s.eq_ignore_ascii_case("v1") {
+        Ok(Some("v1"))
+    } else if s.eq_ignore_ascii_case("v2") {
+        Ok(Some("v2"))
+    } else {
+        bail!("invalid proxyProtocolVersion {s:?}; use \"\" | \"v1\" | \"v2\"")
     }
 }
 
@@ -24,7 +28,7 @@ pub fn build_proxy_protocol_header(
     match version {
         "v1" => Ok(build_v1(src, dst)?),
         "v2" => Ok(build_v2(src, dst)?),
-        other => bail!("unsupported proxy protocol version: {other}"),
+        other => bail!("unsupported PROXY Protocol version: {other}"),
     }
 }
 
@@ -236,7 +240,7 @@ fn parse_v2(buf: &[u8]) -> Result<PpConsume> {
     }))
 }
 
-pub fn addrs_from_start_work(
+pub fn addrs_from_start_data_conn(
     src_ip: &str,
     src_port: u16,
     dst_ip: &str,

@@ -1,7 +1,6 @@
 use super::stream::{boxed_stream, DynStream};
 use anyhow::{anyhow, Result};
 use futures::future::poll_fn;
-use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 
@@ -9,7 +8,6 @@ const MAX_NUM_STREAMS: usize = 4096;
 
 fn yamux_config() -> yamux::Config {
     let mut cfg = yamux::Config::default();
-
     cfg.set_max_num_streams(MAX_NUM_STREAMS);
     cfg.set_max_connection_receive_window(Some(256 * 1024 * MAX_NUM_STREAMS));
     cfg
@@ -95,13 +93,4 @@ pub async fn serve_yamux_session(
             None => return Ok(()),
         }
     }
-}
-
-#[allow(dead_code)]
-pub fn keepalive_duration(secs: i64) -> Duration {
-    Duration::from_secs(secs.max(1) as u64)
-}
-
-pub fn client_session(io: DynStream) -> YamuxClient {
-    YamuxClient::start(io)
 }

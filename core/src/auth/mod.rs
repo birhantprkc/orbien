@@ -1,3 +1,3 @@
 mod token;
 
-pub use token::{get_auth_key, verify_login};
+pub use token::{compute_auth_digest, verify_auth_digest, verify_login};
