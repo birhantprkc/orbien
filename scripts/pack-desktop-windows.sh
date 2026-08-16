@@ -50,7 +50,31 @@ if [[ ! -f "$BIN" ]]; then
   exit 1
 fi
 
+# Relative --outdir is resolved from repo root; always use an absolute path
+# so PowerShell Compress-Archive does not resolve against the staging dir.
+case "$OUTDIR" in
+  /*|[A-Za-z]:*) ;;
+  *) OUTDIR="${ROOT}/${OUTDIR}" ;;
+esac
 mkdir -p "$OUTDIR"
+OUTDIR="$(cd "$OUTDIR" && pwd)"
+
+to_win_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    # Git Bash / MSYS fallback: /d/foo -> D:\foo
+    local p="$1"
+    if [[ "$p" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+      local drive
+      drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')"
+      echo "${drive}:\\${BASH_REMATCH[2]//\//\\}"
+    else
+      echo "${p//\//\\}"
+    fi
+  fi
+}
+
 STAGE="${OUTDIR}/.win-stage-$$"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
@@ -73,21 +97,25 @@ ZIP_NAME="orbien-desktop_${VERSION}_windows_${ARCH_LABEL}.zip"
 ZIP_PATH="${OUTDIR}/${ZIP_NAME}"
 rm -f "$ZIP_PATH"
 
-(
-  cd "$STAGE"
-  if command -v zip >/dev/null 2>&1; then
+if command -v zip >/dev/null 2>&1; then
+  (
+    cd "$STAGE"
     zip -q -r "$ZIP_PATH" .
-  elif command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -NoProfile -Command \
-      "Compress-Archive -Path * -DestinationPath '$ZIP_PATH' -Force"
-  elif command -v powershell >/dev/null 2>&1; then
-    powershell -NoProfile -Command \
-      "Compress-Archive -Path * -DestinationPath '$ZIP_PATH' -Force"
-  else
-    echo "need zip or powershell to create archive" >&2
-    exit 1
-  fi
-)
+  )
+elif command -v powershell.exe >/dev/null 2>&1; then
+  STAGE_WIN="$(to_win_path "$STAGE")"
+  ZIP_WIN="$(to_win_path "$ZIP_PATH")"
+  powershell.exe -NoProfile -Command \
+    "Compress-Archive -Path '${STAGE_WIN}\\*' -DestinationPath '${ZIP_WIN}' -Force"
+elif command -v powershell >/dev/null 2>&1; then
+  STAGE_WIN="$(to_win_path "$STAGE")"
+  ZIP_WIN="$(to_win_path "$ZIP_PATH")"
+  powershell -NoProfile -Command \
+    "Compress-Archive -Path '${STAGE_WIN}\\*' -DestinationPath '${ZIP_WIN}' -Force"
+else
+  echo "need zip or powershell to create archive" >&2
+  exit 1
+fi
 
 rm -rf "$STAGE"
 echo "wrote ${STANDALONE}"
