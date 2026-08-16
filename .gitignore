@@ -8,7 +8,6 @@
 .idea
 /dist/
 /server/assets/
-.orbien.run_id
 
 node_modules/
 dist-ssr/
@@ -40,7 +39,8 @@ yarn.lock
 .env
 .env.*
 !.env.example
-/conf/*.run_id
+**/*.session_id
+.orbien.session_id
 /bak/
 *.bak
 
@@ -64,11 +64,7 @@ $RECYCLE.BIN/
 docs/build
 docs/.docusaurus
 
-# Temp
-/conf
-/examples
-/benchmark
-/bench-quick
-BUILD_ZH.md
-
+/desktop/ui/i18n.slint
+/desktop/ui/version.slint
+/dev
 
