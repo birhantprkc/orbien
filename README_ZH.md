@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-3.0.0--beta.1-blue?style=for-the-badge" alt="orbien:3.0.0-beta.1"/>
+    <img src="https://img.shields.io/badge/orbien-3.1.0--dev-blue?style=for-the-badge" alt="orbien:3.1.0-dev"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -29,6 +29,10 @@
   <a href="https://discord.gg/4dgQjCS3k">
     <img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"/>
   </a>
+</div>
+
+<div align="center">
+  <a href="https://trendshift.io/repositories/128255?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-128255" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/128255/daily?language=Rust" alt="orbien-org%2Forbien | Trendshift" width="250" height="55"/></a>
 </div>
 
 <div align="center">
@@ -53,7 +57,7 @@
 
 ## 快速开始
 
-[下载](download.mdx)对应平台的二进制压缩包解压
+[下载](https://github.com/orbien-org/orbien/tags)对应平台的二进制压缩包解压
 
 ### 服务端
 
