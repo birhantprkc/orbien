@@ -26,7 +26,11 @@ pub struct ServerConfig {
     #[serde(default)]
     pub auth: AuthConfig,
 
-    #[serde(default = "default_proxy_addr", rename = "proxyAddr", alias = "proxy_addr")]
+    #[serde(
+        default = "default_proxy_addr",
+        rename = "proxyAddr",
+        alias = "proxy_addr"
+    )]
     pub proxy_addr: String,
 
     #[serde(default)]
@@ -45,11 +49,7 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
-    #[serde(
-        default = "default_auth_type",
-        rename = "type",
-        alias = "auth_type"
-    )]
+    #[serde(default = "default_auth_type", rename = "type", alias = "auth_type")]
     pub auth_type: String,
     #[serde(default)]
     pub token: String,
@@ -289,8 +289,9 @@ impl Default for ServerConfig {
 impl ServerConfig {
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
-        let raw = super::read_toml_file(path)?;
-        let mut cfg: Self = toml::from_str(&raw)
+        let file = super::read_toml_file(path)?;
+        let expanded = super::expand_env_placeholders(&file)?;
+        let mut cfg: Self = toml::from_str(&expanded)
             .with_context(|| format!("failed to parse config file '{}'", path.display()))?;
         let base = path.parent().unwrap_or_else(|| Path::new("."));
         cfg.resolve_paths(base);
@@ -334,9 +335,7 @@ impl ServerConfig {
             }
         }
         if self.proxy_addr.trim().is_empty() {
-            self.proxy_addr = self
-                .listen_host()
-                .unwrap_or_else(|_| default_listen_host());
+            self.proxy_addr = self.listen_host().unwrap_or_else(|_| default_listen_host());
         }
         if self.auth.auth_type.trim().is_empty() {
             self.auth.auth_type = default_auth_type();

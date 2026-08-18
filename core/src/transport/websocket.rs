@@ -117,9 +117,10 @@ where
             Poll::Pending => return Poll::Pending,
         }
 
-        if let Err(e) = sink.as_mut().start_send(Message::Binary(
-            bytes::Bytes::copy_from_slice(buf),
-        )) {
+        if let Err(e) = sink
+            .as_mut()
+            .start_send(Message::Binary(bytes::Bytes::copy_from_slice(buf)))
+        {
             return Poll::Ready(Err(std::io::Error::other(e)));
         }
         Poll::Ready(Ok(buf.len()))
@@ -147,4 +148,3 @@ where
         }
     }
 }
-

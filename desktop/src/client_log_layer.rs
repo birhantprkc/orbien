@@ -106,7 +106,8 @@ impl FieldVisitor {
         if name == "message" {
             self.message = Some(value.trim_matches('"').to_string());
         } else {
-            self.fields.push((name.to_string(), value.trim_matches('"').to_string()));
+            self.fields
+                .push((name.to_string(), value.trim_matches('"').to_string()));
         }
     }
 }
