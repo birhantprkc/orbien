@@ -93,6 +93,18 @@ remotePort = 9000
 
 # 性能测试
 
-下图是基于本地回环的内存占用测试结果。相较于`frp`，`Orbien`的内存占用更低且更稳定:
+| 环境 | 说明                                                     |
+|----|--------------------------------------------------------|
+| 平台 | macOS 26.2（25C56）· Darwin 25.2.0 · arm64               |
+| 硬件 | Apple M2（8 核）· 16 GB                                   |
+| 详细 | [benchmarks](https://github.com/orbien-org/benchmarks) |
 
-![mem.png](doc/img/mem.png)
+该测试在本地回环下进行，相较于`frp`，`Orbien`比较明显的优势是在高并发条件下内存占用更低、也更稳定。
+
+![mem-graph.png](doc/img/bench/mem-graph.png)
+
+![tcp-bitrate.png](doc/img/bench/tcp-bitrate.png)
+
+![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
+
+![http-throughput.png](doc/img/bench/http-throughput.png)

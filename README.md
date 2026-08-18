@@ -93,6 +93,19 @@ If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/or
 
 # Benchmark
 
-The chart below shows local loopback memory usage. Compared with `frp`, Orbien uses less memory and stays more stable. 
 
-![mem.png](doc/img/mem.png)
+| Env | Details |
+|-----|---------|
+| Platform | macOS 26.2 (25C56) · Darwin 25.2.0 · arm64 |
+| Hardware | Apple M2 (8 cores) · 16 GB |
+| Details | [benchmarks](https://github.com/orbien-org/benchmarks) |
+
+These benchmarks were run on local loopback. Compared with `frp`, Orbien's clearest advantage is lower and more stable memory usage under high concurrency.
+
+![mem-graph.png](doc/img/bench/mem-graph.png)
+
+![tcp-bitrate.png](doc/img/bench/tcp-bitrate.png)
+
+![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
+
+![http-throughput.png](doc/img/bench/http-throughput.png)
