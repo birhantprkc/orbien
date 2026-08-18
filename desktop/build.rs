@@ -68,16 +68,10 @@ fn generate_slint_i18n() {
     let en = parse_properties(&fs::read_to_string(&en_path).expect("read en_US.properties"));
 
     for key in zh.keys() {
-        assert!(
-            en.contains_key(key),
-            "en_US.properties missing key: {key}"
-        );
+        assert!(en.contains_key(key), "en_US.properties missing key: {key}");
     }
     for key in en.keys() {
-        assert!(
-            zh.contains_key(key),
-            "zh_CN.properties missing key: {key}"
-        );
+        assert!(zh.contains_key(key), "zh_CN.properties missing key: {key}");
     }
 
     let keys: Vec<&String> = zh.keys().filter(|k| !k.starts_with("msg.")).collect();

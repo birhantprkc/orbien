@@ -428,6 +428,67 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
     }
 }
 
+fn omit_gateway_port(tunnel_type: &str) -> Option<u16> {
+    let t = tunnel_type.trim();
+    if t.eq_ignore_ascii_case("http") {
+        Some(80)
+    } else if t.eq_ignore_ascii_case("https") {
+        Some(443)
+    } else {
+        None
+    }
+}
+
+fn split_host_port(s: &str) -> Option<(&str, &str)> {
+    if s.starts_with('[') {
+        let close = s.find(']')?;
+        let host = &s[..=close];
+        let port = s.get(close + 1..)?.strip_prefix(':')?;
+        if port.is_empty() {
+            return None;
+        }
+        return Some((host, port));
+    }
+    let (host, port) = s.rsplit_once(':')?;
+    if host.is_empty() || port.is_empty() || host.contains(':') {
+        None
+    } else {
+        Some((host, port))
+    }
+}
+
+fn strip_omitted_port(hostport: &str, omit: u16) -> &str {
+    match split_host_port(hostport) {
+        Some((host, port)) if port.parse() == Ok(omit) => host,
+        _ => hostport,
+    }
+}
+
+fn display_remote_addr(tunnel_type: &str, addr: &str) -> String {
+    let Some(omit) = omit_gateway_port(tunnel_type) else {
+        return addr.to_string();
+    };
+    let addr = addr.trim();
+    if addr.is_empty() {
+        return String::new();
+    }
+    if !addr.contains(',') {
+        return strip_omitted_port(addr, omit).to_string();
+    }
+    let mut out = String::with_capacity(addr.len());
+    for part in addr.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(',');
+        }
+        out.push_str(strip_omitted_port(part, omit));
+    }
+    out
+}
+
 fn apply_tunnel_remotes(ui: &AppWindow, remotes: &std::collections::HashMap<String, String>) {
     let model = ui.get_tunnels();
     let Some(vm) = model.as_any().downcast_ref::<slint::VecModel<TunnelRow>>() else {
@@ -438,7 +499,11 @@ fn apply_tunnel_remotes(ui: &AppWindow, remotes: &std::collections::HashMap<Stri
         let Some(mut row) = vm.row_data(i) else {
             continue;
         };
-        let next = remotes.get(row.name.as_str()).cloned().unwrap_or_default();
+        let raw = remotes
+            .get(row.name.as_str())
+            .map(String::as_str)
+            .unwrap_or("");
+        let next = display_remote_addr(row.tunnel_type.as_str(), raw);
         if row.remote_addr.as_str() == next {
             continue;
         }
@@ -536,7 +601,6 @@ fn main() -> Result<(), slint::PlatformError> {
         .backend_name("winit".into())
         .select();
 
-    // Fmt → stderr; ClientUiLogLayer → Logger page (orbien_client / orbien_core INFO+).
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     tracing_subscriber::registry()
@@ -563,7 +627,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ));
 
     if default_path.is_file() {
-        match orbien_client::ClientConfig::load(&default_path) {
+        match orbien_client::ClientConfig::load_for_edit(&default_path) {
             Ok(cfg) => {
                 apply_config_to_ui(&ui, &cfg);
                 log_store()
