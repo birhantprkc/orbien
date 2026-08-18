@@ -8,7 +8,11 @@ title: Authentication
 
 Token authentication when the client connects to the server. If the server has no `token` (or it is empty), authentication is skipped.
 
-The `token` on both sides must match, or login fails (`authorization failed`).
+When the server enables auth, both sides must use the same `token`, or login fails. The token is read from the config file. You can also inject it with environment variables; see [Environment Variables](./env.md).
+
+:::tip
+At login the token is used to compute a digest. The token itself is never sent to the server in plaintext.
+:::
 
 ## Example
 
@@ -33,15 +37,3 @@ token = "YOUR_TOKEN"
 | Parameter    | Required | Default | Description                                                          |
 |--------------|----------|---------|----------------------------------------------------------------------|
 | `auth.token` | No       |         | Shared secret; empty on the server disables auth; both sides must match |
-
-## Command line
-
-The server can also set this via a flag (it overrides `token` in the config file):
-
-```shell
-./orbien-server -c orbien-server.toml -t YOUR_TOKEN
-```
-
-| Flag             | Default | Description   |
-|------------------|---------|---------------|
-| `-t` / `--token` |         | Shared secret |

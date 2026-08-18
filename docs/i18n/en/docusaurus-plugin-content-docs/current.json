@@ -15,9 +15,9 @@
     "message": "Transport Protocols",
     "description": "The label for category '传输协议' in sidebar 'docsSidebar'"
   },
-  "sidebar.docsSidebar.category.功能": {
+  "sidebar.docsSidebar.category.功能特性": {
     "message": "Features",
-    "description": "The label for category '功能' in sidebar 'docsSidebar'"
+    "description": "The label for category '功能特性' in sidebar 'docsSidebar'"
   },
   "sidebar.docsSidebar.category.集成": {
     "message": "Integrations",
