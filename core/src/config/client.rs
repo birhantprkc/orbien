@@ -276,22 +276,35 @@ impl TunnelConfig {
     }
 }
 
+enum LoadMode {
+    Runtime,
+    Edit,
+}
+
 impl ClientConfig {
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        Self::load_with(path, true)
+        Self::load_with(path, LoadMode::Runtime)
     }
 
     pub fn load_for_edit(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        Self::load_with(path, false)
+        Self::load_with(path, LoadMode::Edit)
     }
 
-    fn load_with(path: impl AsRef<Path>, resolve: bool) -> anyhow::Result<Self> {
+    fn load_with(path: impl AsRef<Path>, mode: LoadMode) -> anyhow::Result<Self> {
         let path = path.as_ref();
-        let raw = super::read_toml_file(path)?;
-        let mut cfg: Self = toml::from_str(&raw)
+        let file = super::read_toml_file(path)?;
+        let expanded = match mode {
+            LoadMode::Runtime => Some(super::expand_env_placeholders(&file)?),
+            LoadMode::Edit => {
+                super::env::reject_env_placeholders(&file)?;
+                None
+            }
+        };
+        let text = expanded.as_deref().unwrap_or(file.as_str());
+        let mut cfg: Self = toml::from_str(text)
             .with_context(|| format!("failed to parse config file '{}'", path.display()))?;
         let base = path.parent().unwrap_or_else(|| Path::new("."));
-        if resolve {
+        if matches!(mode, LoadMode::Runtime) {
             cfg.resolve_paths(base);
         }
         cfg.complete();

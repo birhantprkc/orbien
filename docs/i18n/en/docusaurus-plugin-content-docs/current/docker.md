@@ -65,6 +65,55 @@ services:
 docker compose up -d
 ```
 
+<div id="env">
+
+### Option 3: Inject config from environment variables
+
+</div>
+
+Write <code>{'{{env.NAME}}'}</code> in the config, then pass values with `-e` or Compose `environment`. See [Environment Variables](./features/env.md) for the syntax.
+
+```toml
+#orbien-server.toml
+listen = "{{env.ORBIEN_LISTEN:0.0.0.0:9527}}"
+
+[auth]
+token = "{{env.ORBIEN_TOKEN}}"
+
+[dashboard]
+addr = "0.0.0.0"
+port = 8020
+user = "{{env.DASHBOARD_USER:admin}}"
+password = "{{env.DASHBOARD_PASSWORD:123456}}"
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  orbien-server:
+    image: ghcr.io/orbien-org/orbien-server:latest
+    container_name: orbien-server
+    restart: unless-stopped
+    ports:
+      - "9527:9527"
+      - "8020:8020"
+    environment:
+      ORBIEN_TOKEN: ${ORBIEN_TOKEN}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    volumes:
+      - ./orbien-server.toml:/etc/orbien/orbien-server.toml:ro
+```
+
+```shell
+export ORBIEN_TOKEN=YOUR_TOKEN
+export DASHBOARD_PASSWORD=change-me
+docker compose up -d
+```
+
+:::warning
+String fields must quote the placeholder. If a variable is unset and has no default, the process fails to start. Do not write <code>{'{{env.}}'}</code> in the desktop client's config.
+:::
+
 ---
 
 ## Client

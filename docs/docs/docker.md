@@ -65,6 +65,55 @@ services:
 docker compose up -d
 ```
 
+<div id="env">
+
+### 方式三：用环境变量注入配置
+
+</div>
+
+配置里写 <code>{'{{env.NAME}}'}</code>，用 `-e` 或 Compose `environment` 传入。语法见 [环境变量](./features/env.md)。
+
+```toml
+#orbien-server.toml
+listen = "{{env.ORBIEN_LISTEN:0.0.0.0:9527}}"
+
+[auth]
+token = "{{env.ORBIEN_TOKEN}}"
+
+[dashboard]
+addr = "0.0.0.0"
+port = 8020
+user = "{{env.DASHBOARD_USER:admin}}"
+password = "{{env.DASHBOARD_PASSWORD:123456}}"
+```
+
+```yaml
+# docker-compose.yaml
+services:
+  orbien-server:
+    image: ghcr.io/orbien-org/orbien-server:latest
+    container_name: orbien-server
+    restart: unless-stopped
+    ports:
+      - "9527:9527"
+      - "8020:8020"
+    environment:
+      ORBIEN_TOKEN: ${ORBIEN_TOKEN}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    volumes:
+      - ./orbien-server.toml:/etc/orbien/orbien-server.toml:ro
+```
+
+```shell
+export ORBIEN_TOKEN=YOUR_TOKEN
+export DASHBOARD_PASSWORD=change-me
+docker compose up -d
+```
+
+:::warning
+字符串字段必须给占位符加引号；变量未设置且没有默认值时进程会启动失败。桌面客户端（Orbien-Desktop）不要在配置里写 <code>{'{{env.}}'}</code>。
+:::
+
 ---
 
 ## 客户端

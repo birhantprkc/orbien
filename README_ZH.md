@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-3.0.0-blue?style=for-the-badge" alt="orbien:3.0.0"/>
+    <img src="https://img.shields.io/badge/orbien-3.1.0--beta.1-blue?style=for-the-badge" alt="orbien:3.1.0-beta.1"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -29,6 +29,10 @@
   <a href="https://discord.gg/4dgQjCS3k">
     <img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"/>
   </a>
+</div>
+
+<div align="center">
+  <a href="https://trendshift.io/repositories/128255?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-128255" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/128255/daily?language=Rust" alt="orbien-org%2Forbien | Trendshift" width="250" height="55"/></a>
 </div>
 
 <div align="center">
@@ -53,7 +57,7 @@
 
 ## 快速开始
 
-[下载](download.mdx)对应平台的二进制压缩包解压
+[下载](https://github.com/orbien-org/orbien/tags)对应平台的二进制压缩包解压
 
 ### 服务端
 
@@ -87,8 +91,29 @@ remotePort = 9000
 
 ![desktop_zh.gif](doc/img/desktop_zh.gif)
 
-# 性能测试
+## 性能测试
 
-下图是基于本地回环的内存占用测试结果。相较于`frp`，`Orbien`的内存占用更低且更稳定:
+| 环境 | 说明                                                     |
+|----|--------------------------------------------------------|
+| 平台 | macOS 26.2· Darwin 25.2.0 · arm64               |
+| 硬件 | Apple M2（8 核）· 16 GB                                   |
+| 详细 | [benchmarks](https://github.com/orbien-org/benchmarks) |
 
-![mem.png](doc/img/mem.png)
+为了排除各种干扰因素，本测试是在本地回环下进行，相较于`frp`，`Orbien`比较明显的优势是在高并发条件下内存占用更低、更加平稳。
+
+![mem-graph.png](doc/img/bench/mem-graph.png)
+
+![tcp-bitrate.png](doc/img/bench/tcp-bitrate.png)
+
+![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
+
+![http-throughput.png](doc/img/bench/http-throughput.png)
+
+## 许可证
+
+- [Apache License 2.0](https://github.com/orbien-org/orbien/blob/main/LICENSE)
+
+## 联系
+
+- 问题反馈：[issues](https://github.com/orbien-org/orbien/issues)
+- 交流群：[discord](https://discord.com/invite/4dgQjCS3k)

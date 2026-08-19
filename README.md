@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-3.0.0-blue?style=for-the-badge" alt="orbien:3.0.0"/>
+    <img src="https://img.shields.io/badge/orbien-3.1.0--beta.1-blue?style=for-the-badge" alt="orbien:3.1.0-beta.1"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -29,6 +29,10 @@
   <a href="https://discord.gg/4dgQjCS3k">
     <img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"/>
   </a>
+</div>
+
+<div align="center">
+  <a href="https://trendshift.io/repositories/128255?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-128255" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/128255/daily?language=Rust" alt="orbien-org%2Forbien | Trendshift" width="250" height="55"/></a>
 </div>
 
 <div align="center">
@@ -44,7 +48,7 @@ A lightweight, high-performance, and secure intranet penetration tool with a bin
 
 ## Features
 
-- **High performance**: end-to-end zero-copy forwarding, low latency, high throughput, no GC pauses, and low memory usage
+- **High performance**: high performance, packet-loss resilient, high throughput, no GC pauses, and low memory usage
 - **Tunnel protocols**: TCP, UDP, HTTP, HTTPS, and more
 - **Transport protocols**: TCP, KCP, WebSocket, QUIC, with TCP multiplexing support
 - **Security**: Token-based tunnel authentication, TLS and mTLS encryption; HTTPS supports transparent forwarding and client-side TLS termination
@@ -53,7 +57,7 @@ A lightweight, high-performance, and secure intranet penetration tool with a bin
 
 ## Quick Start
 
-[Download](download.mdx) the binary archive for your platform and extract it.
+[Download](https://github.com/orbien-org/orbien/tags) the binary archive for your platform and extract it.
 
 ### Server
 
@@ -87,8 +91,30 @@ If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/or
 
 ![desktop_en.gif](doc/img/desktop_en.gif)
 
-# Benchmark
+## Benchmark
 
-The chart below shows local loopback memory usage. Compared with `frp`, Orbien uses less memory and stays more stable. 
 
-![mem.png](doc/img/mem.png)
+| Env | Details |
+|-----|---------|
+| Platform | macOS 26.2 · Darwin 25.2.0 · arm64 |
+| Hardware | Apple M2 (8 cores) · 16 GB |
+| Details | [benchmarks](https://github.com/orbien-org/benchmarks) |
+
+To rule out various sources of interference, these benchmarks were run on local loopback. Compared with `frp`, Orbien's clearest advantage is lower and steadier memory usage under high concurrency.
+
+![mem-graph.png](doc/img/bench/mem-graph.png)
+
+![tcp-bitrate.png](doc/img/bench/tcp-bitrate.png)
+
+![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
+
+![http-throughput.png](doc/img/bench/http-throughput.png)
+
+## License
+
+- [Apache License 2.0](https://github.com/orbien-org/orbien/blob/main/LICENSE)
+
+## Contact
+
+- Issues: [issues](https://github.com/orbien-org/orbien/issues)
+- Community: [discord](https://discord.com/invite/4dgQjCS3k)

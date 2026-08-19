@@ -55,8 +55,8 @@ pub fn split_server_endpoint(server: &str) -> (String, String) {
 
 pub fn load_config(config_path: &str) -> Result<(ClientConfig, PathBuf)> {
     let path = resolve_path(config_path);
-    let cfg = ClientConfig::load_for_edit(&path)
-        .with_context(|| format!("load {}", path.display()))?;
+    let cfg =
+        ClientConfig::load_for_edit(&path).with_context(|| format!("load {}", path.display()))?;
     Ok((cfg, path))
 }
 
@@ -74,7 +74,7 @@ pub fn load_merge_tunnels(
 ) -> Result<(ClientConfig, PathBuf)> {
     let path = resolve_path(config_path);
     let mut cfg = if path.is_file() {
-        ClientConfig::load(&path).with_context(|| format!("load {}", path.display()))?
+        ClientConfig::load_for_edit(&path).with_context(|| format!("load {}", path.display()))?
     } else {
         build_base(
             server_addr,
@@ -118,7 +118,7 @@ pub fn load_merge_server_fields(
 ) -> Result<(ClientConfig, PathBuf)> {
     let path = resolve_path(config_path);
     let mut cfg = if path.is_file() {
-        ClientConfig::load(&path).with_context(|| format!("load {}", path.display()))?
+        ClientConfig::load_for_edit(&path).with_context(|| format!("load {}", path.display()))?
     } else {
         ClientConfig {
             server: String::new(),
@@ -184,8 +184,7 @@ pub fn save(path: &Path, cfg: &ClientConfig) -> Result<()> {
 
 fn ensure_parent(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create dir {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("create dir {}", parent.display()))?;
     }
     Ok(())
 }
@@ -269,8 +268,7 @@ fn parse_u16(raw: &str, field: &str) -> Result<u16> {
     if t.is_empty() {
         return Ok(0);
     }
-    t.parse()
-        .map_err(|_| anyhow!("invalid {field}: {raw}"))
+    t.parse().map_err(|_| anyhow!("invalid {field}: {raw}"))
 }
 
 fn parse_bandwidth_mbps(raw: &str) -> f64 {
@@ -300,10 +298,7 @@ fn split_csv(raw: &str) -> Vec<String> {
 }
 
 fn is_tls_term_plugin(plugin_type: &str) -> bool {
-    matches!(
-        plugin_type.trim().to_ascii_lowercase().as_str(),
-        "tls-term"
-    )
+    matches!(plugin_type.trim().to_ascii_lowercase().as_str(), "tls-term")
 }
 
 pub fn tunnel_from_parts(

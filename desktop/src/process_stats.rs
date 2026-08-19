@@ -198,12 +198,7 @@ fn memory_bytes() -> u64 {
     unsafe {
         let mut counters = std::mem::zeroed::<ProcessMemoryCounters>();
         counters.cb = std::mem::size_of::<ProcessMemoryCounters>() as u32;
-        if GetProcessMemoryInfo(
-            GetCurrentProcess(),
-            &mut counters,
-            counters.cb,
-        ) == 0
-        {
+        if GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) == 0 {
             return 0;
         }
         counters.working_set_size as u64

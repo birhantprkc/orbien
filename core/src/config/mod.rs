@@ -1,10 +1,12 @@
 mod client;
+mod env;
 mod server;
 
 pub use client::{
     ClientConfig, ClientTlsConfig, PluginConfig, PluginRequestHeaders, TransportConfig,
     TunnelConfig, TunnelTransportConfig,
 };
+pub use env::{contains_env_placeholders, expand_env_placeholders};
 pub use server::{
     parse_host_port, DashboardConfig, QuicOptions, ServerConfig, ServerTlsConfig,
     ServerTransportConfig,
