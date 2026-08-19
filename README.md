@@ -91,16 +91,16 @@ If you prefer not to use the CLI, try the [Orbien-Desktop](https://github.com/or
 
 ![desktop_en.gif](doc/img/desktop_en.gif)
 
-# Benchmark
+## Benchmark
 
 
 | Env | Details |
 |-----|---------|
-| Platform | macOS 26.2 (25C56) · Darwin 25.2.0 · arm64 |
+| Platform | macOS 26.2 · Darwin 25.2.0 · arm64 |
 | Hardware | Apple M2 (8 cores) · 16 GB |
 | Details | [benchmarks](https://github.com/orbien-org/benchmarks) |
 
-These benchmarks were run on local loopback. Compared with `frp`, Orbien's clearest advantage is lower and more stable memory usage under high concurrency.
+To rule out various sources of interference, these benchmarks were run on local loopback. Compared with `frp`, Orbien's clearest advantage is lower and steadier memory usage under high concurrency.
 
 ![mem-graph.png](doc/img/bench/mem-graph.png)
 
@@ -109,3 +109,12 @@ These benchmarks were run on local loopback. Compared with `frp`, Orbien's clear
 ![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
 
 ![http-throughput.png](doc/img/bench/http-throughput.png)
+
+## License
+
+- [Apache License 2.0](https://github.com/orbien-org/orbien/blob/main/LICENSE)
+
+## Contact
+
+- Issues: [issues](https://github.com/orbien-org/orbien/issues)
+- Community: [discord](https://discord.com/invite/4dgQjCS3k)

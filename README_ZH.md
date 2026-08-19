@@ -91,15 +91,15 @@ remotePort = 9000
 
 ![desktop_zh.gif](doc/img/desktop_zh.gif)
 
-# 性能测试
+## 性能测试
 
 | 环境 | 说明                                                     |
 |----|--------------------------------------------------------|
-| 平台 | macOS 26.2（25C56）· Darwin 25.2.0 · arm64               |
+| 平台 | macOS 26.2· Darwin 25.2.0 · arm64               |
 | 硬件 | Apple M2（8 核）· 16 GB                                   |
 | 详细 | [benchmarks](https://github.com/orbien-org/benchmarks) |
 
-该测试在本地回环下进行，相较于`frp`，`Orbien`比较明显的优势是在高并发条件下内存占用更低、也更稳定。
+为了排除各种干扰因素，本测试是在本地回环下进行，相较于`frp`，`Orbien`比较明显的优势是在高并发条件下内存占用更低、更加平稳。
 
 ![mem-graph.png](doc/img/bench/mem-graph.png)
 
@@ -108,3 +108,12 @@ remotePort = 9000
 ![udp-bitrate.png](doc/img/bench/udp-bitrate.png)
 
 ![http-throughput.png](doc/img/bench/http-throughput.png)
+
+## 许可证
+
+- [Apache License 2.0](https://github.com/orbien-org/orbien/blob/main/LICENSE)
+
+## 联系
+
+- 问题反馈：[issues](https://github.com/orbien-org/orbien/issues)
+- 交流群：[discord](https://discord.com/invite/4dgQjCS3k)

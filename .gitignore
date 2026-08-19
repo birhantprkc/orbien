@@ -60,12 +60,11 @@ $RECYCLE.BIN/
 *.njsproj
 *.sln
 *.code-workspace
-/benchmark/results/
 docs/build
 docs/.docusaurus
 
 /desktop/ui/i18n.slint
 /desktop/ui/version.slint
 /dev
-version.md
+
 
