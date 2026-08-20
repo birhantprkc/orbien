@@ -121,10 +121,7 @@ pub fn normalize_host(host: &str) -> String {
         .to_ascii_lowercase()
 }
 
-pub fn build_domains(
-    domains: &[String],
-    root_domain: &str,
-) -> anyhow::Result<Vec<String>> {
+pub fn build_domains(domains: &[String], root_domain: &str) -> anyhow::Result<Vec<String>> {
     let root = normalize_host(root_domain);
     let entries: Vec<String> = domains
         .iter()

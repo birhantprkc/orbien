@@ -4,7 +4,7 @@ mod hour_counter;
 mod mem;
 mod traits;
 
-pub use mem::{MemMetrics, TunnelTrafficHistory, TrafficWindow};
+pub use mem::{MemMetrics, TrafficWindow, TunnelTrafficHistory};
 pub use traits::ServerMetrics;
 
 pub const RESERVE_DAYS: usize = 7;

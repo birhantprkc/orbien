@@ -1,13 +1,13 @@
+mod gw;
 mod http;
 mod https;
 mod manager;
 mod tcp;
 mod udp;
-mod gw;
 
+pub use gw::HttpGw;
 pub use http::{run_http_gw_listener, HttpTunnel};
-pub use https::{run_https_gw_listener, HttpsTunnel, HttpsGw};
-pub use manager::{format_local_addr, TunnelManager, TunnelSummary, RegisteredTunnel};
+pub use https::{run_https_gw_listener, HttpsGw, HttpsTunnel};
+pub use manager::{format_local_addr, RegisteredTunnel, TunnelManager, TunnelSummary};
 pub use tcp::TcpTunnel;
 pub use udp::UdpTunnel;
-pub use gw::HttpGw;
