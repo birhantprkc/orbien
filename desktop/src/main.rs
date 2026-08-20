@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod client_log_layer;
 mod config_bridge;
 mod i18n;

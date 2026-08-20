@@ -149,7 +149,11 @@ impl MemMetrics {
         g.tunnels.get(name).map(|p| to_tunnel_snapshot(name, p))
     }
 
-    pub fn tunnel_traffic(&self, name: &str, window: TrafficWindow) -> Option<TunnelTrafficHistory> {
+    pub fn tunnel_traffic(
+        &self,
+        name: &str,
+        window: TrafficWindow,
+    ) -> Option<TunnelTrafficHistory> {
         let g = self.state.lock().expect("metrics lock");
         let p = g.tunnels.get(name)?;
         Some(match window {

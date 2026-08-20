@@ -1,6 +1,6 @@
 use super::gw::{
     build_domains, expand_locations, normalize_host, route_basic_auth_ok, route_user_from_headers,
-    HttpRoute, HttpGw,
+    HttpGw, HttpRoute,
 };
 use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
@@ -42,21 +42,20 @@ impl HttpTunnel {
 
         for domain in &domains {
             for location in &locations {
-                gw
-                    .register(
-                        domain,
-                        HttpRoute {
-                            tunnel_name: name.clone(),
-                            control: Arc::downgrade(&control),
-                            location: location.clone(),
-                            host_header_rewrite: rewrite.clone(),
-                            basic_auth_user: basic_auth_user.clone(),
-                            basic_auth_password: basic_auth_password.clone(),
-                            route_by_http_user: route_by_http_user.clone(),
-                            limiter: limiter.clone(),
-                        },
-                    )
-                    .await?;
+                gw.register(
+                    domain,
+                    HttpRoute {
+                        tunnel_name: name.clone(),
+                        control: Arc::downgrade(&control),
+                        location: location.clone(),
+                        host_header_rewrite: rewrite.clone(),
+                        basic_auth_user: basic_auth_user.clone(),
+                        basic_auth_password: basic_auth_password.clone(),
+                        route_by_http_user: route_by_http_user.clone(),
+                        limiter: limiter.clone(),
+                    },
+                )
+                .await?;
             }
         }
 

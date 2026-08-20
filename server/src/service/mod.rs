@@ -99,9 +99,7 @@ impl Service {
             let gw = Arc::clone(gw);
             let access = Arc::clone(&this.access);
             let shutdown = Arc::clone(&gw_shutdown);
-            set.spawn(
-                async move { run_http_gw_listener(bind, port, gw, access, shutdown).await },
-            );
+            set.spawn(async move { run_http_gw_listener(bind, port, gw, access, shutdown).await });
         }
 
         if let Some(ref gw) = this.https_gw {
@@ -110,9 +108,7 @@ impl Service {
             let gw = Arc::clone(gw);
             let access = Arc::clone(&this.access);
             let shutdown = Arc::clone(&gw_shutdown);
-            set.spawn(async move {
-                run_https_gw_listener(bind, port, gw, access, shutdown).await
-            });
+            set.spawn(async move { run_https_gw_listener(bind, port, gw, access, shutdown).await });
         }
 
         if this.cfg.quic_enabled() {

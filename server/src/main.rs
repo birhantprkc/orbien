@@ -2,8 +2,8 @@ mod access;
 mod control;
 mod dashboard;
 mod metrics;
-mod tunnel;
 mod service;
+mod tunnel;
 
 use anyhow::Result;
 use clap::Parser;

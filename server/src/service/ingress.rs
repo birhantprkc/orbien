@@ -73,7 +73,10 @@ impl Service {
         }
     }
 
-    pub(super) async fn run_kcp(self: Arc<Self>, mut listener: kcp_tokio::KcpListener) -> Result<()> {
+    pub(super) async fn run_kcp(
+        self: Arc<Self>,
+        mut listener: kcp_tokio::KcpListener,
+    ) -> Result<()> {
         loop {
             let (stream, peer) = transport::accept_kcp(&mut listener).await?;
             tracing::debug!(%peer, transport = "kcp", "incoming connection");

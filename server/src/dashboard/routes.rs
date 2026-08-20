@@ -1,9 +1,9 @@
 use super::model::{
-    ApiResponse, ClientInfo, Page, TunnelInfo, TunnelTrafficPoint, TunnelTrafficResp, SystemConfig,
-    SystemInfo, SystemStatus,
+    ApiResponse, ClientInfo, Page, SystemConfig, SystemInfo, SystemStatus, TunnelInfo,
+    TunnelTrafficPoint, TunnelTrafficResp,
 };
 use super::DashState;
-use crate::metrics::{TunnelTrafficHistory, TrafficWindow};
+use crate::metrics::{TrafficWindow, TunnelTrafficHistory};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, Request, StatusCode};
@@ -241,7 +241,11 @@ async fn get_client(
 ) -> Result<Json<ApiResponse<ClientInfo>>, StatusCode> {
     let session_id = urlencoding_decode(&session_id);
     let snap = state.svc.dashboard_snapshot().await;
-    match snap.clients.into_iter().find(|c| c.session_id == session_id) {
+    match snap
+        .clients
+        .into_iter()
+        .find(|c| c.session_id == session_id)
+    {
         Some(c) => Ok(Json(ApiResponse::ok(c))),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -305,7 +309,11 @@ async fn tunnel_traffic(
     Query(q): Query<TrafficQuery>,
 ) -> Result<Json<ApiResponse<TunnelTrafficResp>>, StatusCode> {
     let name = urlencoding_decode(&name);
-    match state.svc.metrics().tunnel_traffic(&name, traffic_window(&q)) {
+    match state
+        .svc
+        .metrics()
+        .tunnel_traffic(&name, traffic_window(&q))
+    {
         Some(hist) => Ok(Json(ApiResponse::ok(traffic_resp(hist)))),
         None => Err(StatusCode::NOT_FOUND),
     }

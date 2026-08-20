@@ -152,7 +152,10 @@ impl Service {
                 c.push_data_conn(stream).await;
                 Ok(())
             }
-            None => Err(anyhow!("unknown session_id for data conn: {}", nw.session_id)),
+            None => Err(anyhow!(
+                "unknown session_id for data conn: {}",
+                nw.session_id
+            )),
         }
     }
 }
