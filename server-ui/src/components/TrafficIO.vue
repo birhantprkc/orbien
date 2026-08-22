@@ -72,7 +72,7 @@ const outbound = computed(() => Number(props.trafficOut ?? 0) || 0)
 
 .traffic-io.chip {
   padding: 0.28rem 0.55rem;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--muted) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
 }
@@ -96,8 +96,8 @@ const outbound = computed(() => Number(props.trafficOut ?? 0) || 0)
 }
 
 .arrow {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 0.72rem;
+  height: 0.72rem;
   flex-shrink: 0;
   display: inline-grid;
   place-items: center;

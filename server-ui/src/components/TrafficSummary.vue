@@ -112,7 +112,7 @@ const outShare = computed(() => 100 - inShare.value)
 .traffic-icon {
   width: 2.6rem;
   height: 2.6rem;
-  border-radius: 10px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -169,7 +169,7 @@ const outShare = computed(() => 100 - inShare.value)
 .traffic-bar {
   display: flex;
   height: 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   background: var(--line);
 }
@@ -198,7 +198,7 @@ const outShare = computed(() => 100 - inShare.value)
   display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
-  border-radius: 2px;
+  border-radius: var(--radius);
   margin-right: 0.35rem;
   vertical-align: middle;
 }

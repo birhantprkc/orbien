@@ -181,7 +181,7 @@ const descItems = computed<DescItem[]>(() =>
         {{ tunnelTotal }}
       </StatCard>
       <StatCard :label="t('overview.connections')" icon="link" tone="orange">
-        {{ status?.activeConns ?? 0 }}
+        {{ status?.activeConnections ?? 0 }}
       </StatCard>
     </section>
 
@@ -279,7 +279,7 @@ const descItems = computed<DescItem[]>(() =>
   display: inline-flex;
   align-items: center;
   padding: 0.18rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--accent-text);
@@ -297,7 +297,7 @@ const descItems = computed<DescItem[]>(() =>
 .range-toggle {
   display: inline-flex;
   padding: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--muted) 10%, transparent);
   border: 1px solid var(--line);
 }
@@ -310,7 +310,7 @@ const descItems = computed<DescItem[]>(() =>
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0.28rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
 }
 

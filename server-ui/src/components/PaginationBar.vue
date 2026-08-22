@@ -137,7 +137,7 @@ function onPageSizeChange(evt: Event) {
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.28rem 1.7rem 0.28rem 0.65rem;
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5 8 10.5 12 6.5'/%3E%3C/svg%3E");
@@ -172,7 +172,7 @@ function onPageSizeChange(evt: Event) {
   min-width: 1.7rem;
   height: 1.7rem;
   padding: 0 0.3rem;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
   display: inline-grid;
   place-items: center;

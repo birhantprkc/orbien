@@ -34,7 +34,7 @@ export interface SystemStatus {
     clientCounts: number
     totalClientCounts: number
     tunnelTypeCount: Record<string, number>
-    activeConns: number
+    activeConnections: number
     totalTrafficIn: number
     totalTrafficOut: number
 }
@@ -48,7 +48,7 @@ export interface ClientInfo {
     clientIP: string
     version: string
     tunnelCount: number
-    activeConns: number
+    activeConnections: number
     connectedSecs: number
     status: string
 }
@@ -62,7 +62,7 @@ export interface TunnelInfo {
     status: string
     todayTrafficIn: number
     todayTrafficOut: number
-    activeConns: number
+    activeConnections: number
     lastStartTime?: string
 }
 

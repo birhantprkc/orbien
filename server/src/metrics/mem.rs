@@ -27,7 +27,7 @@ impl TrafficWindow {
 pub struct ServerSnapshot {
     pub total_traffic_in: u64,
     pub total_traffic_out: u64,
-    pub active_conns: usize,
+    pub active_connections: usize,
     pub client_counts: usize,
     pub total_client_counts: usize,
     pub tunnel_type_counts: HashMap<String, usize>,
@@ -42,7 +42,7 @@ pub struct TunnelSnapshot {
     pub session_id: String,
     pub today_traffic_in: u64,
     pub today_traffic_out: u64,
-    pub active_conns: usize,
+    pub active_connections: usize,
     pub last_start_at: Option<i64>,
     pub last_close_at: Option<i64>,
 }
@@ -70,7 +70,7 @@ struct TunnelStats {
     traffic_out: DateCounter,
     traffic_in_hourly: HourCounter,
     traffic_out_hourly: HourCounter,
-    active_conns: Counter,
+    active_connections: Counter,
     last_start_unix: Option<i64>,
     last_close_unix: Option<i64>,
 }
@@ -85,7 +85,7 @@ impl TunnelStats {
             traffic_out: DateCounter::new(RESERVE_DAYS),
             traffic_in_hourly: HourCounter::new(RESERVE_HOURS),
             traffic_out_hourly: HourCounter::new(RESERVE_HOURS),
-            active_conns: Counter::new(),
+            active_connections: Counter::new(),
             last_start_unix: None,
             last_close_unix: None,
         }
@@ -97,7 +97,7 @@ struct State {
     total_traffic_out: DateCounter,
     total_traffic_in_hourly: HourCounter,
     total_traffic_out_hourly: HourCounter,
-    active_conns: Counter,
+    active_connections: Counter,
     client_counts: Counter,
     seen_clients: HashSet<String>,
     tunnel_type_counts: HashMap<String, Counter>,
@@ -116,7 +116,7 @@ impl MemMetrics {
                 total_traffic_out: DateCounter::new(RESERVE_DAYS),
                 total_traffic_in_hourly: HourCounter::new(RESERVE_HOURS),
                 total_traffic_out_hourly: HourCounter::new(RESERVE_HOURS),
-                active_conns: Counter::new(),
+                active_connections: Counter::new(),
                 client_counts: Counter::new(),
                 seen_clients: HashSet::new(),
                 tunnel_type_counts: HashMap::new(),
@@ -137,7 +137,7 @@ impl MemMetrics {
         ServerSnapshot {
             total_traffic_in: g.total_traffic_in.today_count().max(0) as u64,
             total_traffic_out: g.total_traffic_out.today_count().max(0) as u64,
-            active_conns: g.active_conns.count().max(0) as usize,
+            active_connections: g.active_connections.count().max(0) as usize,
             client_counts: g.client_counts.count().max(0) as usize,
             total_client_counts: g.seen_clients.len(),
             tunnel_type_counts,
@@ -274,17 +274,17 @@ impl ServerMetrics for MemMetrics {
 
     fn open_connection(&self, name: &str, _tunnel_type: &str) {
         let mut g = self.state.lock().expect("metrics lock");
-        g.active_conns.inc(1);
+        g.active_connections.inc(1);
         if let Some(p) = g.tunnels.get_mut(name) {
-            p.active_conns.inc(1);
+            p.active_connections.inc(1);
         }
     }
 
     fn close_connection(&self, name: &str, _tunnel_type: &str) {
         let mut g = self.state.lock().expect("metrics lock");
-        g.active_conns.dec(1);
+        g.active_connections.dec(1);
         if let Some(p) = g.tunnels.get_mut(name) {
-            p.active_conns.dec(1);
+            p.active_connections.dec(1);
         }
     }
 
@@ -325,7 +325,7 @@ fn to_tunnel_snapshot(name: &str, p: &TunnelStats) -> TunnelSnapshot {
         session_id: p.session_id.clone(),
         today_traffic_in: p.traffic_in.today_count().max(0) as u64,
         today_traffic_out: p.traffic_out.today_count().max(0) as u64,
-        active_conns: p.active_conns.count().max(0) as usize,
+        active_connections: p.active_connections.count().max(0) as usize,
         last_start_at: p.last_start_unix,
         last_close_at: p.last_close_unix,
     }

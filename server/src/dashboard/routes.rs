@@ -198,7 +198,7 @@ async fn system_info(State(state): State<Arc<DashState>>) -> Json<ApiResponse<Sy
                 .count(),
             total_client_counts: snap.total_client_counts,
             tunnel_type_count: snap.tunnel_type_count,
-            active_conns: snap.active_conns,
+            active_connections: snap.active_connections,
             total_traffic_in: snap.total_traffic_in,
             total_traffic_out: snap.total_traffic_out,
         },

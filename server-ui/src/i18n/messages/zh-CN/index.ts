@@ -96,7 +96,7 @@ const zhCN: MessageSchema = {
         client: '客户端',
         empty: '暂无隧道',
         traffic: '今日流量',
-        activeConns: '连接数',
+        activeConnections: '连接数',
         filter: '协议筛选',
         filterAll: '全部',
         filterEmpty: '当前协议下暂无隧道',
