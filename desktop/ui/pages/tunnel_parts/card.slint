@@ -39,6 +39,10 @@ export component TunnelCard inherits Rectangle {
         ? root.item.remote-port : "—");
     private property <string> remote-text:
         root.item.remote-addr != "" ? root.item.remote-addr : root.remote-fallback;
+    private property <string> local-text:
+        root.item.local-ip != ""
+        ? root.item.local-ip + ":" + root.item.local-port
+        : root.item.local-port;
 
     background: Theme.panel;
     border-radius: 12px;
@@ -132,11 +136,12 @@ export component TunnelCard inherits Rectangle {
                 }
 
                 Text {
-                    text: root.item.local-port;
+                    text: root.local-text;
                     color: Theme.text;
                     font-size: 15px;
                     font-weight: 700;
-                    horizontal-stretch: 0;
+                    horizontal-stretch: 1;
+                    overflow: elide;
                     vertical-alignment: center;
                 }
             }

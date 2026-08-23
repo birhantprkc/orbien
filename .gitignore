@@ -66,5 +66,9 @@ docs/.docusaurus
 /desktop/ui/i18n.slint
 /desktop/ui/version.slint
 /dev
+/bak/
+.idea/
+.vscode/
+
 
 
