@@ -17,6 +17,7 @@ component TypeBadge inherits Rectangle {
             text: root.tunnel-type == "udp" ? "UDP"
                 : root.tunnel-type == "http" ? "HTTP"
                 : root.tunnel-type == "https" ? "HTTPS"
+                : root.tunnel-type == "socks5" ? "SOCKS5"
                 : "TCP";
             color: Theme.accent-strong;
             font-size: 12px;
@@ -40,9 +41,10 @@ export component TunnelCard inherits Rectangle {
     private property <string> remote-text:
         root.item.remote-addr != "" ? root.item.remote-addr : root.remote-fallback;
     private property <string> local-text:
-        root.item.local-ip != ""
+        root.item.tunnel-type == "socks5" ? "—"
+        : root.item.local-ip != ""
         ? root.item.local-ip + ":" + root.item.local-port
-        : root.item.local-port;
+        : root.item.local-port != "" ? root.item.local-port : "—";
 
     background: Theme.panel;
     border-radius: 12px;

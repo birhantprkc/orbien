@@ -84,6 +84,8 @@ fn row_to_tunnel(row: &TunnelRow) -> anyhow::Result<orbien_core::config::TunnelC
         row.plugin_cert_file.as_str(),
         row.plugin_key_file.as_str(),
         row.plugin_host_rewrite.as_str(),
+        row.plugin_username.as_str(),
+        row.plugin_password.as_str(),
     )
 }
 
@@ -110,6 +112,8 @@ fn tunnel_to_row(p: &orbien_core::config::TunnelConfig) -> TunnelRow {
         plugin_cert_file: parts.plugin_cert_file.into(),
         plugin_key_file: parts.plugin_key_file.into(),
         plugin_host_rewrite: parts.plugin_host_rewrite.into(),
+        plugin_username: parts.plugin_username.into(),
+        plugin_password: parts.plugin_password.into(),
     }
 }
 
@@ -249,6 +253,7 @@ fn type_index(tunnel_type: &str) -> i32 {
         "udp" => 1,
         "http" => 2,
         "https" => 3,
+        "socks5" => 4,
         _ => 0,
     }
 }
@@ -258,6 +263,7 @@ fn type_name(index: i32) -> &'static str {
         1 => "udp",
         2 => "http",
         3 => "https",
+        4 => "socks5",
         _ => "tcp",
     }
 }
@@ -313,6 +319,8 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_plugin_cert_file("".into());
     ui.set_tunnel_edit_plugin_key_file("".into());
     ui.set_tunnel_edit_plugin_host_rewrite("".into());
+    ui.set_tunnel_edit_plugin_username("".into());
+    ui.set_tunnel_edit_plugin_password("".into());
     ui.set_tunnel_edit_type_index(0);
     ui.set_tunnel_show_advanced(false);
 }
@@ -341,24 +349,27 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_plugin_cert_file(row.plugin_cert_file.clone());
     ui.set_tunnel_edit_plugin_key_file(row.plugin_key_file.clone());
     ui.set_tunnel_edit_plugin_host_rewrite(row.plugin_host_rewrite.clone());
+    ui.set_tunnel_edit_plugin_username(row.plugin_username.clone());
+    ui.set_tunnel_edit_plugin_password(row.plugin_password.clone());
     ui.set_tunnel_show_advanced(false);
 }
 
 fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
     let ty = type_name(ui.get_tunnel_edit_type_index());
+    let is_socks5 = ty == "socks5";
     let is_http = ty == "http";
     let is_https = ty == "https";
     let plugin = is_https && ui.get_tunnel_edit_plugin_tls_term();
     TunnelRow {
         name: ui.get_tunnel_edit_name(),
         tunnel_type: ty.into(),
-        local_ip: if plugin {
-            "127.0.0.1".into()
+        local_ip: if plugin || is_socks5 {
+            "".into()
         } else {
             ui.get_tunnel_edit_local_ip()
         },
-        local_port: if plugin {
-            "0".into()
+        local_port: if plugin || is_socks5 {
+            "".into()
         } else {
             ui.get_tunnel_edit_local_port()
         },
@@ -423,6 +434,16 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         },
         plugin_host_rewrite: if plugin {
             ui.get_tunnel_edit_plugin_host_rewrite()
+        } else {
+            "".into()
+        },
+        plugin_username: if is_socks5 {
+            ui.get_tunnel_edit_plugin_username()
+        } else {
+            "".into()
+        },
+        plugin_password: if is_socks5 {
+            ui.get_tunnel_edit_plugin_password()
         } else {
             "".into()
         },
@@ -972,12 +993,30 @@ fn wire_tunnel_and_config(
             return;
         }
         let ty_idx = ui.get_tunnel_edit_type_index();
-        let is_domain = ty_idx >= 2;
+        let is_domain = ty_idx == 2 || ty_idx == 3;
+        let is_socks5 = ty_idx == 4;
         let use_plugin = ty_idx == 3 && ui.get_tunnel_edit_plugin_tls_term();
         let local_port = ui.get_tunnel_edit_local_port();
         let remote_port = ui.get_tunnel_edit_remote_port();
 
-        if is_domain {
+        if is_socks5 {
+            if let Err(msg) = require_port_field(
+                remote_port.as_str(),
+                i18n::tunnel_remote_port_required(loc),
+                i18n::tunnel_remote_port_invalid(loc),
+            ) {
+                toast_err(&ui, msg);
+                return;
+            }
+            if ui.get_tunnel_edit_plugin_username().trim().is_empty() {
+                toast_err(&ui, i18n::tunnel_plugin_username_required(loc));
+                return;
+            }
+            if ui.get_tunnel_edit_plugin_password().trim().is_empty() {
+                toast_err(&ui, i18n::tunnel_plugin_password_required(loc));
+                return;
+            }
+        } else if is_domain {
             if ui.get_tunnel_edit_domains().trim().is_empty() {
                 toast_err(&ui, i18n::tunnel_domain_required(loc));
                 return;

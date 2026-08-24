@@ -23,13 +23,16 @@ export component TunnelEditor inherits Rectangle {
     in-out property <string> edit-plugin-cert-file: "";
     in-out property <string> edit-plugin-key-file: "";
     in-out property <string> edit-plugin-host-rewrite: "";
+    in-out property <string> edit-plugin-username: "";
+    in-out property <string> edit-plugin-password: "";
     in-out property <int> edit-type-index: 0;
     in-out property <bool> show-advanced: false;
 
-    private property <bool> is-port: root.edit-type-index <= 1;
+    private property <bool> is-tcp-udp: root.edit-type-index <= 1;
+    private property <bool> is-socks5: root.edit-type-index == 4;
     private property <bool> is-http: root.edit-type-index == 2;
     private property <bool> is-https: root.edit-type-index == 3;
-    private property <bool> is-domain: root.edit-type-index >= 2;
+    private property <bool> is-domain: root.edit-type-index == 2 || root.edit-type-index == 3;
     private property <bool> use-plugin: root.is-https && root.edit-plugin-tls-term;
 
     callback save-clicked;
@@ -88,12 +91,12 @@ export component TunnelEditor inherits Rectangle {
             }
             FormCombo {
                 label: Tr.tunnel-type;
-                model: ["TCP", "UDP", "HTTP", "HTTPS"];
+                model: ["TCP", "UDP", "HTTP", "HTTPS", "SOCKS5"];
                 current-index <=> root.edit-type-index;
             }
         }
 
-        if root.is-port: FormRow {
+        if root.is-tcp-udp: FormRow {
             FormField {
                 label: Tr.tunnel-local-port;
                 value <=> root.edit-local-port;
@@ -104,6 +107,23 @@ export component TunnelEditor inherits Rectangle {
                 value <=> root.edit-remote-port;
                 placeholder: "9000";
             }
+        }
+
+        if root.is-socks5: FormRow {
+            FormField {
+                label: Tr.tunnel-remote-port;
+                value <=> root.edit-remote-port;
+                placeholder: "9000";
+            }
+            FormField {
+                label: Tr.tunnel-plugin-username;
+                value <=> root.edit-plugin-username;
+            }
+        }
+
+        if root.is-socks5: FormField {
+            label: Tr.tunnel-plugin-password;
+            value <=> root.edit-plugin-password;
         }
 
         if root.is-http: FormRow {
@@ -263,7 +283,7 @@ export component TunnelEditor inherits Rectangle {
                 }
             }
 
-            if !root.use-plugin: FormRow {
+            if root.is-tcp-udp || (root.is-https && !root.use-plugin): FormRow {
                 FormField {
                     label: Tr.tunnel-local-ip;
                     value <=> root.edit-local-ip;
@@ -275,7 +295,8 @@ export component TunnelEditor inherits Rectangle {
                     placeholder: Tr.tunnel-bandwidth-hint;
                 }
             }
-            if root.use-plugin: FormRow {
+
+            if root.is-https && root.use-plugin: FormRow {
                 FormField {
                     label: Tr.tunnel-bandwidth;
                     value <=> root.edit-bandwidth-limit;
@@ -288,7 +309,20 @@ export component TunnelEditor inherits Rectangle {
                 }
             }
 
-            if !root.use-plugin: FormRow {
+            if root.is-socks5: FormRow {
+                FormField {
+                    label: Tr.tunnel-bandwidth;
+                    value <=> root.edit-bandwidth-limit;
+                    placeholder: Tr.tunnel-bandwidth-hint;
+                }
+                FormCombo {
+                    label: Tr.tunnel-bandwidth-side;
+                    model: ["client", "server"];
+                    current-index <=> root.edit-bandwidth-side-index;
+                }
+            }
+
+            if root.is-tcp-udp || (root.is-https && !root.use-plugin): FormRow {
                 FormCombo {
                     label: Tr.proxy-protocol;
                     model: [Tr.proxy-protocol-off, "v1", "v2"];
@@ -299,6 +333,12 @@ export component TunnelEditor inherits Rectangle {
                     model: ["client", "server"];
                     current-index <=> root.edit-bandwidth-side-index;
                 }
+            }
+
+            if root.is-socks5: FormCombo {
+                label: Tr.proxy-protocol;
+                model: [Tr.proxy-protocol-off, "v1", "v2"];
+                current-index <=> root.edit-proxy-protocol-index;
             }
         }
     }
