@@ -43,9 +43,6 @@ pub async fn basic_auth(
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
-    if !needs_auth(&state) {
-        return Ok(next.run(req).await);
-    }
     if authorized(&state, req.headers()) {
         return Ok(next.run(req).await);
     }
@@ -55,10 +52,6 @@ pub async fn basic_auth(
         HeaderValue::from_static("Basic realm=\"Restricted\""),
     );
     Err(res)
-}
-
-fn needs_auth(state: &DashState) -> bool {
-    !state.cfg.user.is_empty() || !state.cfg.password.is_empty()
 }
 
 fn authorized(state: &DashState, headers: &HeaderMap) -> bool {
