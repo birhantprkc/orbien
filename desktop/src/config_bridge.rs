@@ -301,6 +301,10 @@ fn is_tls_term_plugin(plugin_type: &str) -> bool {
     matches!(plugin_type.trim().to_ascii_lowercase().as_str(), "tls-term")
 }
 
+fn is_socks5_plugin(plugin_type: &str) -> bool {
+    matches!(plugin_type.trim().to_ascii_lowercase().as_str(), "socks5")
+}
+
 pub fn tunnel_from_parts(
     name: &str,
     tunnel_type: &str,
@@ -321,9 +325,18 @@ pub fn tunnel_from_parts(
     plugin_cert_file: &str,
     plugin_key_file: &str,
     plugin_host_rewrite: &str,
+    plugin_username: &str,
+    plugin_password: &str,
 ) -> Result<TunnelConfig> {
     let ty = tunnel_type.trim().to_ascii_lowercase();
-    let plugin = if ty == "https" && plugin_tls_term {
+    let plugin = if ty == "socks5" {
+        Some(PluginConfig {
+            plugin_type: "socks5".into(),
+            username: plugin_username.trim().into(),
+            password: plugin_password.trim().into(),
+            ..Default::default()
+        })
+    } else if ty == "https" && plugin_tls_term {
         Some(PluginConfig {
             plugin_type: "tls-term".into(),
             service: plugin_local_addr.trim().into(),
@@ -331,9 +344,17 @@ pub fn tunnel_from_parts(
             key_file: plugin_key_file.trim().into(),
             host_header_rewrite: plugin_host_rewrite.trim().into(),
             request_headers: Default::default(),
+            username: String::new(),
+            password: String::new(),
         })
     } else {
         None
+    };
+
+    let protocol = if ty == "socks5" {
+        "tcp".into()
+    } else {
+        ty.clone()
     };
 
     let service = if plugin.is_some() {
@@ -344,7 +365,7 @@ pub fn tunnel_from_parts(
 
     Ok(TunnelConfig {
         name: name.trim().into(),
-        protocol: ty,
+        protocol,
         service,
         remote_port: parse_u16(remote_port, "remotePort")?,
         domains: split_csv(domains),
@@ -367,7 +388,24 @@ pub fn tunnel_from_parts(
 }
 
 pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
-    let (local_ip, local_port) = if p.service.trim().is_empty() {
+    let socks5 = p
+        .plugin
+        .as_ref()
+        .filter(|pl| is_socks5_plugin(&pl.plugin_type));
+    let tls_term = p
+        .plugin
+        .as_ref()
+        .filter(|pl| is_tls_term_plugin(&pl.plugin_type));
+
+    let tunnel_type = if socks5.is_some() {
+        "socks5".into()
+    } else {
+        p.protocol.clone()
+    };
+
+    let (local_ip, local_port) = if socks5.is_some() {
+        (String::new(), String::new())
+    } else if p.service.trim().is_empty() {
         ("127.0.0.1".into(), "0".into())
     } else {
         match parse_host_port(&p.service, 0) {
@@ -376,14 +414,9 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         }
     };
 
-    let plugin = p
-        .plugin
-        .as_ref()
-        .filter(|pl| is_tls_term_plugin(&pl.plugin_type));
-
     TunnelParts {
         name: p.name.clone(),
-        tunnel_type: p.protocol.clone(),
+        tunnel_type,
         local_ip,
         local_port,
         remote_port: p.remote_port.to_string(),
@@ -396,15 +429,17 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         bandwidth: bandwidth_display(p.transport.bandwidth),
         bandwidth_limit_side: p.transport.bandwidth_limit_side.clone(),
         proxy_protocol_version: p.transport.proxy_protocol_version.clone(),
-        plugin_tls_term: plugin.is_some(),
-        plugin_local_addr: plugin
+        plugin_tls_term: tls_term.is_some(),
+        plugin_local_addr: tls_term
             .map(|pl| pl.service.clone())
             .unwrap_or_else(|| "127.0.0.1:80".into()),
-        plugin_cert_file: plugin.map(|pl| pl.cert_file.clone()).unwrap_or_default(),
-        plugin_key_file: plugin.map(|pl| pl.key_file.clone()).unwrap_or_default(),
-        plugin_host_rewrite: plugin
+        plugin_cert_file: tls_term.map(|pl| pl.cert_file.clone()).unwrap_or_default(),
+        plugin_key_file: tls_term.map(|pl| pl.key_file.clone()).unwrap_or_default(),
+        plugin_host_rewrite: tls_term
             .map(|pl| pl.host_header_rewrite.clone())
             .unwrap_or_default(),
+        plugin_username: socks5.map(|pl| pl.username.clone()).unwrap_or_default(),
+        plugin_password: socks5.map(|pl| pl.password.clone()).unwrap_or_default(),
     }
 }
 
@@ -429,6 +464,8 @@ pub struct TunnelParts {
     pub plugin_cert_file: String,
     pub plugin_key_file: String,
     pub plugin_host_rewrite: String,
+    pub plugin_username: String,
+    pub plugin_password: String,
 }
 
 pub fn protocol_index(protocol: &str) -> i32 {

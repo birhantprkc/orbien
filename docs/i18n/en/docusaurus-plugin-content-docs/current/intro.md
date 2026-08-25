@@ -10,7 +10,7 @@ slug: /intro
 
 ## Features
 
-- **Multi-protocol tunnels**: TCP, UDP, HTTP, and HTTPS
+- **Multi-protocol tunnels**: TCP, UDP, HTTP, HTTPS and SOCKS5
 - **Transport**: TCP, QUIC, KCP, and WebSocket
 - **Multiplexing**: TCP multiplexing so one physical connection carries multiple logical data streams, reducing overhead and latency
 - **HTTPS**: HTTPS is forwarded by SNI; domain certificates stay local. Optional client-side TLS termination

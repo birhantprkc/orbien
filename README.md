@@ -2,7 +2,7 @@
   <img src="docs/static/img/logo.png" alt="Logo" width="180" height="180" style="border-radius:24px;margin-bottom:20px;"/>
 </div>
 <p align="center" style="font-size:18px;color:#555;margin-top:-10px;margin-bottom:24px;">
-  Intranet penetration built with Rust and Tokio
+  NAT traversal built with Rust and Tokio
 </p>
 <div align="center">
   <a href="https://github.com/orbien-org/orbien/stargazers">
@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Rust-Tokio-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/>
   </a>
   <a href="https://github.com/orbien-org/orbien/releases">
-    <img src="https://img.shields.io/badge/orbien-3.1.1-blue?style=for-the-badge" alt="orbien:3.1.1"/>
+    <img src="https://img.shields.io/badge/orbien-3.2.0--beta.1-blue?style=for-the-badge" alt="orbien:3.2.0-beta.1"/>
   </a>
   <a href="https://somsubhra.github.io/github-release-stats/?username=orbien-org&repository=orbien">
     <img src="https://img.shields.io/github/downloads/orbien-org/orbien/total?style=for-the-badge" alt="Downloads"/>
@@ -49,7 +49,7 @@ A lightweight, high-performance, and secure intranet penetration tool with a bin
 ## Features
 
 - **High performance**: high performance, packet-loss resilient, high throughput, no GC pauses, and low memory usage
-- **Tunnel protocols**: TCP, UDP, HTTP, HTTPS, and more
+- **Tunnel protocols**: TCP, UDP, HTTP, HTTPS,SOCKS5 and more
 - **Transport protocols**: TCP, KCP, WebSocket, QUIC, with TCP multiplexing support
 - **Security**: Token-based tunnel authentication, TLS and mTLS encryption; HTTPS supports transparent forwarding and client-side TLS termination
 - **Cross-platform**: Windows, Linux, macOS, FreeBSD, and more

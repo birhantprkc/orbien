@@ -91,6 +91,8 @@ export component AppWindow inherits Window {
     in-out property <string> tunnel-edit-plugin-cert-file: "";
     in-out property <string> tunnel-edit-plugin-key-file: "";
     in-out property <string> tunnel-edit-plugin-host-rewrite: "";
+    in-out property <string> tunnel-edit-plugin-username: "";
+    in-out property <string> tunnel-edit-plugin-password: "";
     in-out property <int> tunnel-edit-type-index: 0;
     in-out property <bool> tunnel-show-advanced: false;
 
@@ -217,6 +219,8 @@ export component AppWindow inherits Window {
                 edit-plugin-cert-file <=> root.tunnel-edit-plugin-cert-file;
                 edit-plugin-key-file <=> root.tunnel-edit-plugin-key-file;
                 edit-plugin-host-rewrite <=> root.tunnel-edit-plugin-host-rewrite;
+                edit-plugin-username <=> root.tunnel-edit-plugin-username;
+                edit-plugin-password <=> root.tunnel-edit-plugin-password;
                 edit-type-index <=> root.tunnel-edit-type-index;
                 show-advanced <=> root.tunnel-show-advanced;
                 add-clicked => { root.tunnel-add(); }

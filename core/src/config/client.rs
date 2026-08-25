@@ -174,6 +174,11 @@ pub struct PluginConfig {
 
     #[serde(default, rename = "requestHeaders", alias = "request_headers")]
     pub request_headers: PluginRequestHeaders,
+
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -435,6 +440,9 @@ impl ClientConfig {
                     if t.requires_local_service() {
                         let _ = t.service_host_port()?;
                     }
+                    if let Some(plugin) = &t.plugin {
+                        Self::validate_tcp_tunnel_plugin(t.name.as_str(), plugin)?;
+                    }
                 }
                 "http" | "https" => {
                     if t.domains.is_empty() {
@@ -448,35 +456,69 @@ impl ClientConfig {
                         let _ = t.service_host_port()?;
                     }
                     if let Some(plugin) = &t.plugin {
-                        let pt = plugin.plugin_type.trim().to_ascii_lowercase();
-                        if !pt.is_empty() && pt != "tls-term" {
-                            return Err(anyhow!(
-                                "tunnel `{}` unsupported plugin.type {:?}",
-                                t.name,
-                                plugin.plugin_type
-                            ));
-                        }
-                        if pt == "tls-term" {
-                            if plugin.service.trim().is_empty() {
-                                return Err(anyhow!(
-                                    "tunnel `{}` plugin.service is required for tls-term",
-                                    t.name
-                                ));
-                            }
-                            let (h, p) = parse_host_port(&plugin.service, 0).map_err(|e| {
-                                anyhow!("tunnel `{}` invalid plugin.service: {e}", t.name)
-                            })?;
-                            if h.is_empty() || p == 0 {
-                                return Err(anyhow!(
-                                    "tunnel `{}` plugin.service must be host:port",
-                                    t.name
-                                ));
-                            }
-                        }
+                        Self::validate_https_tunnel_plugin(t.name.as_str(), plugin)?;
                     }
                 }
                 _ => {}
             }
+        }
+        Ok(())
+    }
+
+    fn validate_tcp_tunnel_plugin(name: &str, plugin: &PluginConfig) -> anyhow::Result<()> {
+        let pt = plugin.plugin_type.trim().to_ascii_lowercase();
+        if pt.is_empty() {
+            return Ok(());
+        }
+        match pt.as_str() {
+            "socks5" => Self::validate_socks5_plugin_fields(name, plugin),
+            other => Err(anyhow!(
+                "tunnel `{}` unsupported plugin.type {:?}",
+                name,
+                other
+            )),
+        }
+    }
+
+    fn validate_https_tunnel_plugin(name: &str, plugin: &PluginConfig) -> anyhow::Result<()> {
+        let pt = plugin.plugin_type.trim().to_ascii_lowercase();
+        if pt.is_empty() {
+            return Ok(());
+        }
+        match pt.as_str() {
+            "tls-term" => {
+                if plugin.service.trim().is_empty() {
+                    return Err(anyhow!(
+                        "tunnel `{}` plugin.service is required for tls-term",
+                        name
+                    ));
+                }
+                let (h, p) = parse_host_port(&plugin.service, 0)
+                    .map_err(|e| anyhow!("tunnel `{}` invalid plugin.service: {e}", name))?;
+                if h.is_empty() || p == 0 {
+                    return Err(anyhow!(
+                        "tunnel `{}` plugin.service must be host:port",
+                        name
+                    ));
+                }
+                Ok(())
+            }
+            other => Err(anyhow!(
+                "tunnel `{}` unsupported plugin.type {:?}",
+                name,
+                other
+            )),
+        }
+    }
+
+    fn validate_socks5_plugin_fields(name: &str, plugin: &PluginConfig) -> anyhow::Result<()> {
+        let user = plugin.username.trim();
+        let pass = plugin.password.trim();
+        if user.is_empty() || pass.is_empty() {
+            return Err(anyhow!(
+                "tunnel `{}` socks5 requires username and password",
+                name
+            ));
         }
         Ok(())
     }

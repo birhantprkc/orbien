@@ -29,3 +29,4 @@ tokio-rustls = { workspace = true }
 rustls = { workspace = true }
 httparse = { workspace = true }
 hostname = { workspace = true }
+fast-socks5 = "1.0"

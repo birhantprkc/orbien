@@ -5,7 +5,7 @@ pub struct DashboardSnapshot {
     pub clients: Vec<crate::dashboard::model::ClientInfo>,
     pub tunnels: Vec<crate::dashboard::model::TunnelInfo>,
     pub tunnel_type_count: BTreeMap<String, usize>,
-    pub active_conns: usize,
+    pub active_connections: usize,
     pub total_client_counts: usize,
     pub total_traffic_in: u64,
     pub total_traffic_out: u64,
@@ -25,13 +25,13 @@ impl Service {
         for (_, ctrl) in controls.iter() {
             let tunnel_count = ctrl.tunnel_count().await;
             online_ids.insert(ctrl.session_id.clone());
-            let mut active_conns = 0usize;
+            let mut active_connections = 0usize;
             let mut client_tunnels = Vec::new();
             for s in ctrl.tunnel_summaries().await {
                 *tunnel_type_count.entry(s.tunnel_type.clone()).or_default() += 1;
                 let traffic = self.metrics.tunnel_snapshot(&s.name);
-                let tunnel_conns = traffic.as_ref().map(|t| t.active_conns).unwrap_or(0);
-                active_conns += tunnel_conns;
+                let tunnel_conns = traffic.as_ref().map(|t| t.active_connections).unwrap_or(0);
+                active_connections += tunnel_conns;
                 client_tunnels.push(TunnelInfo {
                     name: s.name,
                     tunnel_type: s.tunnel_type,
@@ -41,7 +41,7 @@ impl Service {
                     status: s.status,
                     today_traffic_in: traffic.as_ref().map(|t| t.today_traffic_in).unwrap_or(0),
                     today_traffic_out: traffic.as_ref().map(|t| t.today_traffic_out).unwrap_or(0),
-                    active_conns: tunnel_conns,
+                    active_connections: tunnel_conns,
                     last_start_time: traffic
                         .as_ref()
                         .and_then(|t| format_tunnel_time(t.last_start_at)),
@@ -56,7 +56,7 @@ impl Service {
                 client_ip: ctrl.client_ip.clone(),
                 version: ctrl.version.clone(),
                 tunnel_count,
-                active_conns,
+                active_connections,
                 connected_secs: ctrl.connected_at.elapsed().as_secs(),
                 status: "online".into(),
             });
@@ -76,7 +76,7 @@ impl Service {
                 client_ip: rec.client_ip.clone(),
                 version: rec.version.clone(),
                 tunnel_count: rec.tunnel_count,
-                active_conns: 0,
+                active_connections: 0,
                 connected_secs: rec.disconnected_at.elapsed().as_secs(),
                 status: "offline".into(),
             });
@@ -96,7 +96,7 @@ impl Service {
             clients,
             tunnels,
             tunnel_type_count,
-            active_conns: server_stats.active_conns,
+            active_connections: server_stats.active_connections,
             total_client_counts: total_clients,
             total_traffic_in: server_stats.total_traffic_in,
             total_traffic_out: server_stats.total_traffic_out,

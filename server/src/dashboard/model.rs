@@ -64,8 +64,8 @@ pub struct SystemStatus {
     pub total_client_counts: usize,
     #[serde(rename = "tunnelTypeCount")]
     pub tunnel_type_count: std::collections::BTreeMap<String, usize>,
-    #[serde(rename = "activeConns")]
-    pub active_conns: usize,
+    #[serde(rename = "activeConnections")]
+    pub active_connections: usize,
     #[serde(rename = "totalTrafficIn")]
     pub total_traffic_in: u64,
     #[serde(rename = "totalTrafficOut")]
@@ -85,8 +85,8 @@ pub struct ClientInfo {
     pub version: String,
     #[serde(rename = "tunnelCount")]
     pub tunnel_count: usize,
-    #[serde(rename = "activeConns")]
-    pub active_conns: usize,
+    #[serde(rename = "activeConnections")]
+    pub active_connections: usize,
     #[serde(rename = "connectedSecs")]
     pub connected_secs: u64,
     pub status: String,
@@ -108,8 +108,8 @@ pub struct TunnelInfo {
     pub today_traffic_in: u64,
     #[serde(rename = "todayTrafficOut")]
     pub today_traffic_out: u64,
-    #[serde(rename = "activeConns")]
-    pub active_conns: usize,
+    #[serde(rename = "activeConnections")]
+    pub active_connections: usize,
     #[serde(rename = "lastStartTime", skip_serializing_if = "Option::is_none")]
     pub last_start_time: Option<String>,
 }

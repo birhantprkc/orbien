@@ -6,7 +6,10 @@ title: 管理界面
 
 # 管理界面
 
-服务端 Web 管理面板。在 `orbien-server.toml` 中配置 `[dashboard]`，且 `port > 0` 时启用。
+服务端 Web 管理面板。 `port > 0` 时启用，启用后 **必须** 配置 `user` 与
+`password`。
+
+![dashboard.png](/img/dashboard.png)
 
 ## 示例
 
@@ -21,9 +24,11 @@ user = "admin"
 password = "123456"
 ```
 
-浏览器访问 `http://SERVER_IP:8020`，使用 Basic Auth（`user` / `password`）登录。
+浏览器访问 `http://SERVER_IP:8020`，在弹出框输入用户名和密码登录。
 
-`addr` 默认为 `127.0.0.1`（仅本机）。需远程访问时设为 `0.0.0.0`。`staticDir` 可省略，省略时使用内置前端。
+:::tip
+`addr` 默认为 `127.0.0.1`（仅本机），需远程访问时设为 `0.0.0.0`
+:::
 
 ## 参数
 
@@ -31,6 +36,6 @@ password = "123456"
 |-----------------------|----|-------------|----------------------|
 | `dashboard.addr`      | 否  | `127.0.0.1` | 监听地址；远程访问需 `0.0.0.0` |
 | `dashboard.port`      | 是  | `0`         | 监听端口；`0` 表示关闭        |
-| `dashboard.user`      | 否  |             | Basic Auth 用户名       |
-| `dashboard.password`  | 否  |             | Basic Auth 密码        |
+| `dashboard.user`      | 是  |             | 登录用户名                |
+| `dashboard.password`  | 是  |             | 登录密码                 |
 | `dashboard.staticDir` | 否  |             | 静态资源目录；空则使用内置前端      |

@@ -118,6 +118,20 @@ impl DashboardConfig {
     pub fn enabled(&self) -> bool {
         self.port > 0
     }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if !self.enabled() {
+            return Ok(());
+        }
+        let user = self.user.trim();
+        let pass = self.password.trim();
+        if user.is_empty() || pass.is_empty() {
+            anyhow::bail!(
+                "dashboard.user and dashboard.password are required when dashboard.port > 0"
+            );
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -416,6 +430,8 @@ impl ServerConfig {
                 self.http_gw_port
             );
         }
+
+        self.dashboard.validate()?;
 
         Ok(())
     }

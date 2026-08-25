@@ -123,8 +123,8 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
             <code>{{ tunnel.localAddr || '—' }}</code>
           </span>
           <span>
-            <em>{{ t('tunnels.activeConns') }}</em>
-            {{ tunnel.activeConns ?? 0 }}
+            <em>{{ t('tunnels.activeConnections') }}</em>
+            {{ tunnel.activeConnections ?? 0 }}
           </span>
           <span class="meta-client">
             <em>{{ t('tunnels.client') }}</em>
@@ -173,7 +173,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   font-size: 0.78rem;
   font-weight: 650;
   padding: 0.38rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: border-color 0.15s ease,
@@ -188,7 +188,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   font-weight: 600;
   min-width: 1.1rem;
   padding: 0.05rem 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   text-align: center;
   color: var(--muted);
   background: color-mix(in srgb, var(--muted) 12%, transparent);
@@ -216,7 +216,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   color: var(--muted);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -228,7 +228,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   padding: 1rem 1.2rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   cursor: pointer;
   transition: border-color 0.18s ease,
@@ -339,7 +339,7 @@ function onKeyOpen(evt: KeyboardEvent, name: string) {
   min-width: 3.6rem;
   justify-content: center;
   padding: 0.28rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 650;
   color: var(--muted);

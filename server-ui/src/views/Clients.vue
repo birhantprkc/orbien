@@ -209,7 +209,7 @@ async function onKick(sessionId: string, evt: Event) {
   font-size: 0.78rem;
   font-weight: 650;
   padding: 0.38rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: border-color 0.15s ease,
@@ -224,7 +224,7 @@ async function onKick(sessionId: string, evt: Event) {
   font-weight: 600;
   min-width: 1.1rem;
   padding: 0.05rem 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   text-align: center;
   color: var(--muted);
   background: color-mix(in srgb, var(--muted) 12%, transparent);
@@ -252,7 +252,7 @@ async function onKick(sessionId: string, evt: Event) {
   color: var(--muted);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -264,7 +264,7 @@ async function onKick(sessionId: string, evt: Event) {
   padding: 1rem 1.15rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
@@ -296,7 +296,7 @@ async function onKick(sessionId: string, evt: Event) {
   position: relative;
   width: 2.45rem;
   height: 2.45rem;
-  border-radius: 10px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -320,7 +320,7 @@ async function onKick(sessionId: string, evt: Event) {
   bottom: -0.12rem;
   width: 0.52rem;
   height: 0.52rem;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--muted);
   border: 2px solid var(--panel);
   box-sizing: content-box;
@@ -371,7 +371,7 @@ async function onKick(sessionId: string, evt: Event) {
   display: inline-flex;
   align-items: center;
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--muted);
@@ -449,7 +449,7 @@ async function onKick(sessionId: string, evt: Event) {
   min-width: 3.8rem;
   min-height: 1.85rem;
   padding: 0.28rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 650;
   line-height: 1.25;
@@ -463,7 +463,7 @@ async function onKick(sessionId: string, evt: Event) {
   width: 1.85rem;
   height: 1.85rem;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 45%, transparent);
   background: transparent;
   color: var(--danger, #ef4444);

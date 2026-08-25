@@ -6,7 +6,9 @@ title: Dashboard
 
 # Dashboard
 
-Server web dashboard. Enable it by configuring `[dashboard]` in `orbien-server.toml` with `port > 0`.
+Server web dashboard. Enabled when `port > 0`; **`user` and `password` are required** once enabled.
+
+![dashboard_en.png](/img/dashboard_en.png)
 
 ## Example
 
@@ -21,9 +23,11 @@ user = "admin"
 password = "123456"
 ```
 
-Open `http://SERVER_IP:8020` in a browser and log in with Basic Auth (`user` / `password`).
+Open `http://SERVER_IP:8020` in a browser and sign in with username and password in the login dialog.
 
-`addr` defaults to `127.0.0.1` (localhost only). Set it to `0.0.0.0` for remote access. `staticDir` may be omitted; if omitted, the built-in frontend is used.
+:::tip
+`addr` defaults to `127.0.0.1` (localhost only). Set it to `0.0.0.0` for remote access.
+:::
 
 ## Parameters
 
@@ -31,6 +35,6 @@ Open `http://SERVER_IP:8020` in a browser and log in with Basic Auth (`user` / `
 |-------------------------|----------|---------------|----------------------------------------------|
 | `dashboard.addr`        | No       | `127.0.0.1`   | Listen address; use `0.0.0.0` for remote access |
 | `dashboard.port`        | Yes      | `0`           | Listen port; `0` disables the dashboard      |
-| `dashboard.user`        | No       |               | Basic Auth username                          |
-| `dashboard.password`    | No       |               | Basic Auth password                          |
+| `dashboard.user`        | Yes      |               | Login username                               |
+| `dashboard.password`    | Yes      |               | Login password                               |
 | `dashboard.staticDir`   | No       |               | Static assets directory; empty uses the built-in frontend |

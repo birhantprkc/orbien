@@ -96,7 +96,7 @@ const enUS: MessageSchema = {
         client: 'Client',
         empty: 'No tunnels',
         traffic: 'Traffic',
-        activeConns: 'Conns',
+        activeConnections: 'Conns',
         filter: 'Filter by protocol',
         filterAll: 'All',
         filterEmpty: 'No tunnels for this protocol',

@@ -240,7 +240,7 @@ onUnmounted(() => {
         <div class="info-row" role="list">
           <div class="info-item" role="listitem">
             <em>{{ t('clients.connections') }}</em>
-            <strong>{{ client.activeConns ?? 0 }}</strong>
+            <strong>{{ client.activeConnections ?? 0 }}</strong>
           </div>
           <div class="info-item" role="listitem">
             <em>{{ t('clients.tunnels') }}</em>
@@ -311,8 +311,8 @@ onUnmounted(() => {
                   <code>{{ p.localAddr || '—' }}</code>
                 </span>
                 <span>
-                  <em>{{ t('tunnels.activeConns') }}</em>
-                  {{ p.activeConns ?? 0 }}
+                  <em>{{ t('tunnels.activeConnections') }}</em>
+                  {{ p.activeConnections ?? 0 }}
                 </span>
                 <span class="meta-client">
                   <em>{{ t('tunnels.client') }}</em>
@@ -399,7 +399,7 @@ onUnmounted(() => {
 .empty-card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -429,7 +429,7 @@ onUnmounted(() => {
 .avatar {
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -469,7 +469,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--muted);
@@ -503,7 +503,7 @@ onUnmounted(() => {
   width: 1.85rem;
   height: 1.85rem;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 45%, transparent);
   background: transparent;
   color: var(--danger, #ef4444);
@@ -585,7 +585,7 @@ onUnmounted(() => {
 .count {
   min-width: 1.35rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 8px;
+  border-radius: var(--radius);
   text-align: center;
   font-size: 0.72rem;
   font-weight: 650;
@@ -600,7 +600,7 @@ onUnmounted(() => {
   gap: 0.4rem;
   min-width: min(100%, 14rem);
   padding: 0.35rem 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--muted) 6%, transparent);
 }
@@ -660,7 +660,7 @@ onUnmounted(() => {
   padding: 1rem 1.2rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   cursor: pointer;
   transition: border-color 0.18s ease,
@@ -765,7 +765,7 @@ onUnmounted(() => {
   min-width: 3.6rem;
   justify-content: center;
   padding: 0.28rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 650;
   color: var(--muted);
@@ -808,7 +808,7 @@ onUnmounted(() => {
   font-size: 0.85rem;
   font-weight: 650;
   padding: 0.45rem 0.95rem;
-  border-radius: 10px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 

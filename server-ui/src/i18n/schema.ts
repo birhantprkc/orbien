@@ -94,7 +94,7 @@ export interface MessageSchema {
         client: string
         empty: string
         traffic: string
-        activeConns: string
+        activeConnections: string
         filter: string
         filterAll: string
         filterEmpty: string

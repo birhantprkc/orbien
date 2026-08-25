@@ -94,6 +94,14 @@ pub fn tunnel_plugin_addr_required(locale: Locale) -> String {
     msg(locale, "msg.tunnel-plugin-addr-required")
 }
 
+pub fn tunnel_plugin_username_required(locale: Locale) -> String {
+    msg(locale, "msg.tunnel-plugin-username-required")
+}
+
+pub fn tunnel_plugin_password_required(locale: Locale) -> String {
+    msg(locale, "msg.tunnel-plugin-password-required")
+}
+
 pub fn tunnel_copied(locale: Locale) -> String {
     msg(locale, "msg.tunnel-copied")
 }

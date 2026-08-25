@@ -43,9 +43,6 @@ pub async fn basic_auth(
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, Response> {
-    if !needs_auth(&state) {
-        return Ok(next.run(req).await);
-    }
     if authorized(&state, req.headers()) {
         return Ok(next.run(req).await);
     }
@@ -55,10 +52,6 @@ pub async fn basic_auth(
         HeaderValue::from_static("Basic realm=\"Restricted\""),
     );
     Err(res)
-}
-
-fn needs_auth(state: &DashState) -> bool {
-    !state.cfg.user.is_empty() || !state.cfg.password.is_empty()
 }
 
 fn authorized(state: &DashState, headers: &HeaderMap) -> bool {
@@ -198,7 +191,7 @@ async fn system_info(State(state): State<Arc<DashState>>) -> Json<ApiResponse<Sy
                 .count(),
             total_client_counts: snap.total_client_counts,
             tunnel_type_count: snap.tunnel_type_count,
-            active_conns: snap.active_conns,
+            active_connections: snap.active_connections,
             total_traffic_in: snap.total_traffic_in,
             total_traffic_out: snap.total_traffic_out,
         },

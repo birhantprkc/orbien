@@ -553,7 +553,7 @@ watch(
   transform: translateX(-50%);
   min-width: 7.5rem;
   padding: 0.45rem 0.6rem;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow);
@@ -583,7 +583,7 @@ watch(
 .tip-row i {
   width: 0.45rem;
   height: 0.45rem;
-  border-radius: 2px;
+  border-radius: var(--radius);
   display: inline-block;
 }
 
@@ -608,7 +608,7 @@ watch(
   display: inline-block;
   width: 0.55rem;
   height: 0.55rem;
-  border-radius: 2px;
+  border-radius: var(--radius);
   margin-right: 0.3rem;
   vertical-align: middle;
 }

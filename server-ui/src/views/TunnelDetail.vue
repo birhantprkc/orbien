@@ -88,8 +88,8 @@ function openClient(sessionId: string) {
           <div class="metric-value mono">{{ tunnel?.localAddr || '—' }}</div>
         </div>
         <div class="metric" role="listitem">
-          <em>{{ t('tunnels.activeConns') }}</em>
-          <div class="metric-value">{{ tunnel?.activeConns ?? 0 }}</div>
+          <em>{{ t('tunnels.activeConnections') }}</em>
+          <div class="metric-value">{{ tunnel?.activeConnections ?? 0 }}</div>
         </div>
         <div class="metric" role="listitem">
           <em>{{ t('tunnels.traffic') }}</em>
@@ -200,7 +200,7 @@ function openClient(sessionId: string) {
 .avatar {
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -239,7 +239,7 @@ function openClient(sessionId: string) {
   justify-content: center;
   min-height: 1.55rem;
   padding: 0.18rem 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 650;
   line-height: 1.2;
@@ -390,7 +390,7 @@ function openClient(sessionId: string) {
 .range-toggle {
   display: inline-flex;
   padding: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--muted) 10%, transparent);
   border: 1px solid var(--line);
 }
@@ -403,7 +403,7 @@ function openClient(sessionId: string) {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 0.22rem 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
 }
 

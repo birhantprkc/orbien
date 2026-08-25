@@ -94,3 +94,13 @@ hostHeaderRewrite = "127.0.0.1"
 [tunnels.plugin.requestHeaders.set]
 X-Forwarded-Proto = "https"
 X-Orbien-Tunnel = "portal"
+
+[[tunnels]]
+name = "socks5"
+protocol = "tcp"
+remotePort = 9002
+
+[tunnels.plugin]
+type = "socks5"
+username = "admin"
+password = "123456"
