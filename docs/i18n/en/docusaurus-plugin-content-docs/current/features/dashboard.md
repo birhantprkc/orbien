@@ -8,6 +8,8 @@ title: Dashboard
 
 Server web dashboard. Enabled when `port > 0`; **`user` and `password` are required** once enabled.
 
+![dashboard_en.png](/img/dashboard_en.png)
+
 ## Example
 
 ```toml

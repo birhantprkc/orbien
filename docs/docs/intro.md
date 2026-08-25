@@ -11,7 +11,7 @@ slug: /intro
 
 ## 功能特性
 
-- **多协议隧道**：支持 TCP、UDP、HTTP、HTTPS 协议
+- **多协议隧道**：支持 TCP、UDP、HTTP、HTTPS、SOCKS5 协议
 - **传输层** 支持TCP、QUIC、KCP、WebSocket多种传输协议可选
 - **多路复用**：支持TCP多路复用，一条物理连接承载多条逻辑数据流，降低开销和延迟
 - **HTTPS** HTTPS 按 SNI 透传，域名证书在本地，可选客户端TLS终止

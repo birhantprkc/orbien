@@ -9,6 +9,8 @@ title: 管理界面
 服务端 Web 管理面板。 `port > 0` 时启用，启用后 **必须** 配置 `user` 与
 `password`。
 
+![dashboard.png](/img/dashboard.png)
+
 ## 示例
 
 ```toml

@@ -27,7 +27,7 @@ const FeatureList: FeatureItem[] = [
         ),
         description: (
             <Translate id="homepage.feature.tunnel.desc">
-                支持 TCP、UDP、HTTP、HTTPS 协议隧道
+                支持 TCP、UDP、HTTP、HTTPS、SOCKS5 协议隧道
             </Translate>
         ),
     },

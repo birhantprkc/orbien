@@ -2,7 +2,7 @@
   <img src="docs/static/img/logo.png" alt="Logo" width="180" height="180" style="border-radius:24px;margin-bottom:20px;"/>
 </div>
 <p align="center" style="font-size:18px;color:#555;margin-top:-10px;margin-bottom:24px;">
-  基于 Rust 和 Tokio 的内网穿透
+  基于 Rust 和 Tokio 实现的内网穿透
 </p>
 <div align="center">
   <a href="https://github.com/orbien-org/orbien/stargazers">
@@ -49,7 +49,7 @@
 ## 功能特性
 
 - **高性能**：高性能，抗丢包、高吞吐、无GC停顿、内存占用低
-- **隧道协议**：支持 TCP、UDP、HTTP、HTTPS 等多种协议隧道
+- **隧道协议**：支持 TCP、UDP、HTTP、HTTPS、SOCKS5 等多种协议隧道
 - **传输协议**：支持 TCP、KCP、WebSocket、QUIC，支持TCP多路复用
 - **安全加密**：支持 Token 隧道鉴权以及Tls和mTLS加密传输；HTTPS采用透明转发和客户端TLS终止
 - **多平台支持**：支持 Windows、Linux、macOS、freeBSD 等多平台
@@ -95,7 +95,7 @@ remotePort = 9000
 
 | 环境 | 说明                                                     |
 |----|--------------------------------------------------------|
-| 平台 | macOS 26.2· Darwin 25.2.0 · arm64               |
+| 平台 | macOS 26.2· Darwin 25.2.0 · arm64                      |
 | 硬件 | Apple M2（8 核）· 16 GB                                   |
 | 详细 | [benchmarks](https://github.com/orbien-org/benchmarks) |
 

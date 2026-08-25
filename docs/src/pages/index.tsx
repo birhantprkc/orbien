@@ -12,8 +12,14 @@ import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import styles from './index.module.css';
 
 function HeroDashboard(): ReactNode {
-    const lightSrc = useBaseUrl('/img/dashboard.png');
-    const darkSrc = useBaseUrl('/img/dashboard_black.png');
+    const {i18n} = useDocusaurusContext();
+    const isEn = i18n.currentLocale === 'en';
+    const lightSrc = useBaseUrl(
+        isEn ? '/img/dashboard_en.png' : '/img/dashboard.png',
+    );
+    const darkSrc = useBaseUrl(
+        isEn ? '/img/dashboard_en_black.png' : '/img/dashboard_black.png',
+    );
 
     return (
         <div className={styles.heroShot}>
@@ -24,8 +30,8 @@ function HeroDashboard(): ReactNode {
                     id: 'homepage.hero.dashboardAlt',
                     message: 'Orbien 项目监控面板',
                 })}
-                width={1492}
-                height={835}
+                width={1494}
+                height={902}
                 sources={{
                     light: lightSrc,
                     dark: darkSrc,

@@ -304,7 +304,7 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_name("".into());
     ui.set_tunnel_edit_local_ip("127.0.0.1".into());
     ui.set_tunnel_edit_local_port("8080".into());
-    ui.set_tunnel_edit_remote_port("6000".into());
+    ui.set_tunnel_edit_remote_port("9000".into());
     ui.set_tunnel_edit_domains("".into());
     ui.set_tunnel_edit_locations("".into());
     ui.set_tunnel_edit_basic_auth_user("".into());

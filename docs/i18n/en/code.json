@@ -399,7 +399,7 @@
     "message": "Multi-Protocol Tunnels"
   },
   "homepage.feature.tunnel.desc": {
-    "message": "Supports TCP, UDP, HTTP, and HTTPS tunnels"
+    "message": "Supports TCP, UDP, HTTP, HTTPS, and SOCKS5 tunnels"
   },
   "homepage.feature.transport.title": {
     "message": "Multiple Transports"
