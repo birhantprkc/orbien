@@ -4064,6 +4064,7 @@ dependencies = [
  "orbien-client",
  "orbien-core",
  "rfd",
+ "serde",
  "slint",
  "slint-build",
  "tokio",

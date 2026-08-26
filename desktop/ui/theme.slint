@@ -1,32 +1,48 @@
 export global Theme {
+    /// 0 = light (default), 1 = dark
+    in-out property <int> mode: 0;
+    property <bool> dark: mode == 1;
+
     out property <length> sidebar-width: 72px;
     out property <length> radius: 8px;
     out property <length> page-pad: 20px;
     out property <length> page-min-height: 560px;
 
     out property <color> accent: #3b82f6;
-    out property <color> accent-soft: #3b82f61f;
-    out property <color> accent-strong: #2563eb;
-    out property <color> accent-muted: #60a5fa;
-    out property <color> bg: #f0f5fa;
-    out property <color> chrome: #f7fafc;
-    out property <color> panel: #ffffff;
-    out property <color> text: #1e293b;
-    out property <color> text-secondary: #475569;
-    out property <color> muted: #64748b;
-    out property <color> line: #e2e8f0;
-    out property <color> ok: #16a34a;
-    out property <color> danger: #e11d48;
+    out property <color> accent-soft: dark ? #3b82f633 : #3b82f61f;
+    out property <color> accent-strong: dark ? #60a5fa : #2563eb;
+    out property <color> accent-muted: dark ? #93c5fd : #60a5fa;
+    out property <color> bg: dark ? #0b1220 : #f0f5fa;
+    out property <color> chrome: dark ? #111827 : #f7fafc;
+    out property <color> panel: dark ? #1a2332 : #ffffff;
+    out property <color> text: dark ? #e2e8f0 : #1e293b;
+    out property <color> text-secondary: dark ? #94a3b8 : #475569;
+    out property <color> muted: dark ? #64748b : #64748b;
+    out property <color> line: dark ? #2a3648 : #e2e8f0;
+    out property <color> ok: dark ? #22c55e : #16a34a;
+    out property <color> danger: dark ? #fb7185 : #e11d48;
 
-    out property <color> toast-ok-bg: #f0fdf4;
-    out property <color> toast-ok-fg: #16a34a;
-    out property <color> toast-ok-border: #bbf7d0;
-    out property <color> toast-error-bg: #fff1f2;
-    out property <color> toast-error-fg: #e11d48;
-    out property <color> toast-error-border: #fecdd3;
-    out property <color> nav-idle: #64748b;
-    out property <color> blob-a: #3b82f62e;
-    out property <color> blob-b: #38bdf824;
+    out property <color> toast-ok-bg: dark ? #14532d : #f0fdf4;
+    out property <color> toast-ok-fg: dark ? #4ade80 : #16a34a;
+    out property <color> toast-ok-border: dark ? #166534 : #bbf7d0;
+    out property <color> toast-error-bg: dark ? #4c0519 : #fff1f2;
+    out property <color> toast-error-fg: dark ? #fb7185 : #e11d48;
+    out property <color> toast-error-border: dark ? #9f1239 : #fecdd3;
+    out property <color> nav-idle: dark ? #94a3b8 : #64748b;
+    out property <color> blob-a: dark ? #3b82f640 : #3b82f62e;
+    out property <color> blob-b: dark ? #38bdf830 : #38bdf824;
     out property <color> console-bg: #0f172a;
     out property <color> console-line: #94a3b8;
+
+    // shared
+    out property <color> shadow: dark ? #00000066 : #1e3a5f0f;
+    out property <color> shadow-soft: dark ? #00000055 : #1e3a5f0c;
+    out property <color> toast-shadow: dark ? #00000080 : #0f172a28;
+    out property <color> orb-fill: dark ? #1e293b : #ffffff;
+    out property <color> orb-shadow: dark ? #3b82f655 : #3b82f62e;
+    out property <color> status-idle: dark ? #475569 : #cbd5e1;
+    out property <color> status-ring: dark ? #1e293b : #ffffff;
+    out property <color> link-docs: #059669;
+    out property <color> link-docs-bg: dark ? #05966933 : #0596691a;
+    out property <color> danger-soft: dark ? #e11d4833 : #e11d4814;
 }

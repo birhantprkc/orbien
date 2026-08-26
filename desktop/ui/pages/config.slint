@@ -2,7 +2,7 @@ import { Button, ScrollView, Switch } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { IconSetting } from "../icons.slint";
 import { Tr } from "../i18n.slint";
-import { FormField, FormPathField, FormCombo, FormRow } from "tunnel_parts/fields.slint";
+import { FormField, FormPathField, FormCombo, FormRow } from "tunnel/fields.slint";
 
 component SwitchRow inherits Rectangle {
     in property <string> label;
@@ -58,7 +58,7 @@ component Panel inherits Rectangle {
     border-width: 1px;
     border-color: Theme.line;
     drop-shadow-blur: 14px;
-    drop-shadow-color: #1e3a5f0f;
+    drop-shadow-color: Theme.shadow;
     drop-shadow-offset-y: 4px;
     vertical-stretch: 0;
     width: 100%;

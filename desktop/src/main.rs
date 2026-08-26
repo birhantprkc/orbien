@@ -6,6 +6,7 @@ mod log_buffer;
 mod pick_file;
 mod process_stats;
 mod runtime;
+mod ui_prefs;
 
 use i18n::Locale;
 use log_buffer::{LogStore, UiSyncCursor};
@@ -16,11 +17,29 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+use ui_prefs::UiPrefs;
 
 slint::include_modules!();
 
 fn locale_of(ui: &AppWindow) -> Locale {
     Locale::from_index(ui.get_locale_index())
+}
+
+fn apply_theme(ui: &AppWindow, theme_index: i32) {
+    ui.set_theme_index(theme_index);
+}
+
+fn sync_about_theme(about: &AboutDialog, theme_index: i32) {
+    about.invoke_apply_theme(theme_index);
+}
+
+fn persist_prefs(ui: &AppWindow) {
+    let mut prefs = UiPrefs::default();
+    prefs.set_locale_index(ui.get_locale_index());
+    prefs.set_theme_index(ui.get_theme_index());
+    if let Err(e) = ui_prefs::save(&prefs) {
+        tracing::warn!(?e, "failed to save ui prefs");
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -635,7 +654,10 @@ fn main() -> Result<(), slint::PlatformError> {
         .init();
 
     let ui = AppWindow::new()?;
+    let prefs = ui_prefs::load();
+    ui.set_locale_index(prefs.locale_index());
     let _ = ui.global::<Tr>().set_locale_index(ui.get_locale_index());
+    apply_theme(&ui, prefs.theme_index());
     let default_path = config_bridge::default_config_path();
     ui.set_config_file_path(config_bridge::path_display(&default_path).into());
 
@@ -887,6 +909,8 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Tr>().set_locale_index(ui.get_locale_index());
         match AboutDialog::new() {
             Ok(about) => {
+                about.global::<Tr>().set_locale_index(ui.get_locale_index());
+                sync_about_theme(&about, ui.get_theme_index());
                 let about_weak = about.as_weak();
                 about.on_close_clicked(move || {
                     if let Some(dlg) = about_weak.upgrade() {
@@ -1278,6 +1302,17 @@ fn wire_tunnel_and_config(
             ui.global::<Tr>().set_locale_index(index);
             let label = if index == 0 { "zh-CN" } else { "en-US" };
             push_log(&ui, &format!("INFO  locale set to {label}"));
+            persist_prefs(&ui);
+        }
+    });
+
+    let ui_weak = ui.as_weak();
+    ui.on_theme_changed(move |index| {
+        if let Some(ui) = ui_weak.upgrade() {
+            apply_theme(&ui, index);
+            let label = if index == 1 { "dark" } else { "light" };
+            push_log(&ui, &format!("INFO  theme set to {label}"));
+            persist_prefs(&ui);
         }
     });
 }
