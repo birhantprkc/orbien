@@ -10,112 +10,82 @@ use orbien_core::net::{
 };
 use orbien_core::transport::DynStream;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex as AsyncMutex};
 
 struct TunnelEntry {
     cfg: TunnelConfig,
     limiter: Option<Arc<BandwidthLimiter>>,
     plugin: Option<Arc<dyn Plugin>>,
     proxy_protocol: Option<&'static str>,
-    udp_cancel: Mutex<Option<oneshot::Sender<()>>>,
+    udp_cancel: AsyncMutex<Option<oneshot::Sender<()>>>,
 }
 
 pub struct TunnelManager {
-    by_name: HashMap<String, TunnelEntry>,
+    by_name: RwLock<HashMap<String, Arc<TunnelEntry>>>,
     udp_packet_size: usize,
 }
 
 impl TunnelManager {
     pub fn from_config(cfg: &ClientConfig) -> Result<Self> {
-        let mut by_name = HashMap::new();
-        for p in &cfg.tunnels {
-            let limiter = limit::limiter_if_side(
-                p.transport.bandwidth,
-                &p.transport.bandwidth_limit_side,
-                BandwidthLimitSide::Client,
-            )
-            .unwrap_or_else(|e| {
-                tracing::warn!(
-                    tunnel = %p.name,
-                    error = %e,
-                    "invalid bandwidth; ignoring"
-                );
-                None
-            });
-            if let Some(ref l) = limiter {
-                tracing::info!(
-                    tunnel = %p.name,
-                    mbps = p.transport.bandwidth,
-                    bytes_per_sec = l.bytes_per_sec(),
-                    side = "client",
-                    "bandwidth limit enabled"
-                );
-            }
-
-            let plugin = if let Some(ref pc) = p.plugin {
-                if pc.plugin_type.is_empty() {
-                    None
-                } else {
-                    let cn = pick_cert_common_name(&p.domains, &p.name);
-                    let ctx = PluginContext {
-                        name: p.name.clone(),
-                        cert_common_name: cn,
-                    };
-                    Some(plugin::create(ctx, pc)?)
-                }
-            } else {
-                None
-            };
-
-            let proxy_protocol = parse_proxy_protocol_version(&p.transport.proxy_protocol_version)?;
-            if let Some(ver) = proxy_protocol {
-                tracing::info!(
-                    tunnel = %p.name,
-                    version = ver,
-                    "PROXY Protocol enabled (client writes header to local)"
-                );
-            }
-
-            by_name.insert(
-                p.name.clone(),
-                TunnelEntry {
-                    cfg: p.clone(),
-                    limiter,
-                    plugin,
-                    proxy_protocol,
-                    udp_cancel: Mutex::new(None),
-                },
-            );
-        }
-        Ok(Self {
-            by_name,
+        let mgr = Self {
+            by_name: RwLock::new(HashMap::new()),
             udp_packet_size: cfg.udp_packet_size.max(512),
-        })
+        };
+        for t in &cfg.tunnels {
+            mgr.upsert(t)?;
+        }
+        Ok(mgr)
+    }
+
+    pub fn upsert(&self, tunnel: &TunnelConfig) -> Result<()> {
+        let entry = build_entry(tunnel)?;
+        self.by_name
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(tunnel.name.clone(), entry);
+        Ok(())
+    }
+
+    pub fn remove(&self, name: &str) {
+        if let Some(entry) = self
+            .by_name
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(name)
+        {
+            cancel_udp_sync(&entry);
+        }
+    }
+
+    pub fn tunnel_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .by_name
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
     }
 
     pub async fn handle_data_conn(&self, start: &StartDataConn, data: DynStream) -> Result<()> {
         let entry = self
             .by_name
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&start.tunnel_name)
+            .cloned()
             .ok_or_else(|| anyhow!("unknown tunnel: {}", start.tunnel_name))?;
-
-        match entry.cfg.protocol.as_str() {
-            "udp" => self.handle_udp(entry, data).await,
-            "tcp" | "http" | "https" => self.handle_stream(entry, start, data).await,
-            other => Err(anyhow!(
-                "unsupported tunnel protocol on data conn: {} ({})",
-                other,
-                entry.cfg.name
-            )),
-        }
+        let udp_packet_size = self.udp_packet_size;
+        serve_entry(entry, udp_packet_size, start, data).await
     }
 
     async fn handle_stream(
-        &self,
-        entry: &TunnelEntry,
+        entry: &Arc<TunnelEntry>,
         start: &StartDataConn,
         data: DynStream,
     ) -> Result<()> {
@@ -195,7 +165,11 @@ impl TunnelManager {
         Ok(())
     }
 
-    async fn handle_udp(&self, entry: &TunnelEntry, data: DynStream) -> Result<()> {
+    async fn handle_udp(
+        entry: Arc<TunnelEntry>,
+        udp_packet_size: usize,
+        data: DynStream,
+    ) -> Result<()> {
         let local_addr: std::net::SocketAddr = entry
             .cfg
             .service
@@ -223,13 +197,96 @@ impl TunnelManager {
         run_udp_session(
             data,
             local_addr,
-            self.udp_packet_size,
+            udp_packet_size,
             entry.proxy_protocol.map(|s| s.to_string()),
             cancel_rx,
         )
         .await
     }
 }
+
+async fn serve_entry(
+    entry: Arc<TunnelEntry>,
+    udp_packet_size: usize,
+    start: &StartDataConn,
+    data: DynStream,
+) -> Result<()> {
+    match entry.cfg.protocol.as_str() {
+        "udp" => TunnelManager::handle_udp(entry, udp_packet_size, data).await,
+        "tcp" | "http" | "https" => TunnelManager::handle_stream(&entry, start, data).await,
+        other => Err(anyhow!(
+            "unsupported tunnel protocol on data conn: {} ({})",
+            other,
+            entry.cfg.name
+        )),
+    }
+}
+
+fn build_entry(tunnel: &TunnelConfig) -> Result<Arc<TunnelEntry>> {
+    let limiter = limit::limiter_if_side(
+        tunnel.transport.bandwidth,
+        &tunnel.transport.bandwidth_limit_side,
+        BandwidthLimitSide::Client,
+    )
+    .unwrap_or_else(|e| {
+        tracing::warn!(
+            tunnel = %tunnel.name,
+            error = %e,
+            "invalid bandwidth; ignoring"
+        );
+        None
+    });
+    if let Some(ref l) = limiter {
+        tracing::info!(
+            tunnel = %tunnel.name,
+            mbps = tunnel.transport.bandwidth,
+            bytes_per_sec = l.bytes_per_sec(),
+            side = "client",
+            "bandwidth limit enabled"
+        );
+    }
+
+    let plugin = if let Some(ref pc) = tunnel.plugin {
+        if pc.plugin_type.is_empty() {
+            None
+        } else {
+            let cn = pick_cert_common_name(&tunnel.domains, &tunnel.name);
+            let ctx = PluginContext {
+                name: tunnel.name.clone(),
+                cert_common_name: cn,
+            };
+            Some(plugin::create(ctx, pc)?)
+        }
+    } else {
+        None
+    };
+
+    let proxy_protocol = parse_proxy_protocol_version(&tunnel.transport.proxy_protocol_version)?;
+    if let Some(ver) = proxy_protocol {
+        tracing::info!(
+            tunnel = %tunnel.name,
+            version = ver,
+            "PROXY Protocol enabled (client writes header to local)"
+        );
+    }
+
+    Ok(Arc::new(TunnelEntry {
+        cfg: tunnel.clone(),
+        limiter,
+        plugin,
+        proxy_protocol,
+        udp_cancel: AsyncMutex::new(None),
+    }))
+}
+
+fn cancel_udp_sync(entry: &Arc<TunnelEntry>) {
+    if let Ok(mut slot) = entry.udp_cancel.try_lock() {
+        if let Some(tx) = slot.take() {
+            let _ = tx.send(());
+        }
+    }
+}
+
 fn pick_cert_common_name(domains: &[String], tunnel_name: &str) -> String {
     for d in domains {
         let d = d.trim();

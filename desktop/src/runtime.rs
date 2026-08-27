@@ -1,4 +1,4 @@
-use orbien_client::{ClientHandle, ClientStatus};
+use orbien_client::{ClientHandle, ClientStatus, ReloadOutcome};
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 
@@ -43,16 +43,15 @@ pub fn start(cfg: orbien_client::ClientConfig, path: std::path::PathBuf) -> anyh
     h.start(cfg, path)
 }
 
-pub fn restart(cfg: orbien_client::ClientConfig, path: std::path::PathBuf) -> anyhow::Result<()> {
-    let h = handle();
-    let rt = runtime();
-    rt.block_on(async {
-        if h.status().is_active() {
-            h.stop().await;
-        }
+pub fn reload_async(
+    cfg: orbien_client::ClientConfig,
+    path: std::path::PathBuf,
+    on_done: impl FnOnce(anyhow::Result<ReloadOutcome>) + Send + 'static,
+) {
+    runtime().spawn(async move {
+        let result = handle().reload(cfg, path).await;
+        let _ = slint::invoke_from_event_loop(move || on_done(result));
     });
-    let _guard = rt.enter();
-    h.start(cfg, path)
 }
 
 pub fn stop_async(on_done: impl FnOnce() + Send + 'static) {

@@ -1,3 +1,3 @@
 mod session;
 
-pub use session::{Control, SessionEnd};
+pub use session::{ActiveSession, Control, SessionEnd};

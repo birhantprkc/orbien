@@ -1,18 +1,20 @@
 use crate::connector::{build_connector, Connector};
+use crate::reload::{ReloadLevel, ReloadOutcome, TunnelChanges};
 use crate::session_id;
 use crate::tunnel::TunnelManager;
 use anyhow::{anyhow, Result};
 use orbien_core::auth;
-use orbien_core::config::ClientConfig;
-use orbien_core::msg::{self, Login, Message, NewDataConn, NewTunnel, Ping};
+use orbien_core::config::{ClientConfig, TunnelConfig};
+use orbien_core::msg::{self, CloseTunnel, Login, Message, NewDataConn, NewTunnel, Ping};
 use orbien_core::transport::DynStream;
 use orbien_core::VERSION;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncWriteExt, ReadHalf, WriteHalf};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
 use tokio_util::sync::CancellationToken;
@@ -26,9 +28,15 @@ pub enum SessionEnd {
 type CtrlRead = ReadHalf<DynStream>;
 type CtrlWrite = WriteHalf<DynStream>;
 type OnTunnelRemote = Arc<dyn Fn(String, String) + Send + Sync>;
+type OnTunnelRemoved = Arc<dyn Fn(String) + Send + Sync>;
+
+pub struct ActiveSession {
+    pub control: Arc<Control>,
+    pub(crate) done: oneshot::Receiver<Result<SessionEnd>>,
+}
 
 pub struct Control {
-    cfg: ClientConfig,
+    cfg: Arc<RwLock<ClientConfig>>,
     session_id: String,
     reader: Mutex<CtrlRead>,
     writer: Mutex<CtrlWrite>,
@@ -37,40 +45,63 @@ pub struct Control {
     cancel: CancellationToken,
     data_tasks: Mutex<JoinSet<()>>,
     on_tunnel_remote: OnTunnelRemote,
+    on_tunnel_removed: OnTunnelRemoved,
     last_pong_unix: AtomicI64,
+    register_watch: StdMutex<RegisterWatch>,
+}
+
+struct RegisterWatch {
+    pending: HashSet<String>,
+    errors: HashMap<String, String>,
+}
+
+impl RegisterWatch {
+    fn begin(&mut self, name: &str) {
+        self.errors.remove(name);
+        self.pending.insert(name.to_string());
+    }
+
+    fn finish(&mut self, name: &str, error: Option<String>) {
+        self.pending.remove(name);
+        if let Some(err) = error {
+            self.errors.insert(name.to_string(), err);
+        }
+    }
 }
 
 impl Control {
-    pub async fn start(
-        cfg: &ClientConfig,
+    pub async fn open_session(
+        cfg: Arc<RwLock<ClientConfig>>,
         previous_session_id: String,
         config_path: &Path,
         parent_cancel: CancellationToken,
         on_connected: impl FnOnce(),
         on_tunnel_remote: OnTunnelRemote,
-    ) -> Result<SessionEnd> {
+        on_tunnel_removed: OnTunnelRemoved,
+    ) -> Result<ActiveSession> {
+        let cfg_snapshot = cfg.read().await.clone();
         let session_cancel = parent_cancel.child_token();
-        let connector = build_connector(cfg).await?;
+        let connector = build_connector(&cfg_snapshot).await?;
         let mut stream = connector.open().await?;
         tracing::info!(
-            endpoint = %cfg.server_endpoint(),
-            protocol = %cfg.transport.protocol,
-            tcp_mux = cfg.uses_yamux(),
+            endpoint = %cfg_snapshot.server_endpoint(),
+            protocol = %cfg_snapshot.transport.protocol,
+            tcp_mux = cfg_snapshot.uses_yamux(),
             "control stream opened"
         );
 
         let timestamp = now_secs();
-        let auth_digest = auth::compute_auth_digest(&cfg.auth.token, timestamp);
+        let auth_digest = auth::compute_auth_digest(&cfg_snapshot.auth.token, timestamp);
         let login = Login {
             version: VERSION.into(),
             hostname: hostname(),
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
-            user: cfg.user.clone(),
+            user: cfg_snapshot.user.clone(),
             auth_digest,
             timestamp,
             session_id: previous_session_id,
-            pool_count: cfg.transport.pool_count,
+            pool_count: cfg_snapshot.transport.pool_count,
         };
         tracing::info!(
             hostname = %login.hostname,
@@ -102,55 +133,212 @@ impl Control {
 
         let (reader, writer) = tokio::io::split(stream);
         let ctl = Arc::new(Control {
-            cfg: cfg.clone(),
+            cfg: Arc::clone(&cfg),
             session_id: resp.session_id.clone(),
             reader: Mutex::new(reader),
             writer: Mutex::new(writer),
-            tunnels: TunnelManager::from_config(cfg)?,
+            tunnels: TunnelManager::from_config(&cfg_snapshot)?,
             connector,
             cancel: session_cancel.clone(),
             data_tasks: Mutex::new(JoinSet::new()),
             on_tunnel_remote,
+            on_tunnel_removed,
             last_pong_unix: AtomicI64::new(now_secs()),
+            register_watch: StdMutex::new(RegisterWatch {
+                pending: HashSet::new(),
+                errors: HashMap::new(),
+            }),
         });
 
         ctl.register_all_tunnels().await?;
         on_connected();
 
-        let hb = Arc::clone(&ctl);
+        let (done_tx, done_rx) = oneshot::channel();
+        let session_id = resp.session_id.clone();
+        let runner = Arc::clone(&ctl);
         let hb_cancel = session_cancel.clone();
-        let heartbeat = tokio::spawn(async move {
-            tokio::select! {
-                _ = hb_cancel.cancelled() => {}
-                _ = hb.heartbeat_loop() => {}
-            }
+        tokio::spawn(async move {
+            let hb = Arc::clone(&runner);
+            let heartbeat = tokio::spawn(async move {
+                tokio::select! {
+                    _ = hb_cancel.cancelled() => {}
+                    _ = hb.heartbeat_loop() => {}
+                }
+            });
+
+            let to = Arc::clone(&runner);
+            let to_cancel = session_cancel.clone();
+            let timeout_watch = tokio::spawn(async move {
+                tokio::select! {
+                    _ = to_cancel.cancelled() => {}
+                    _ = to.heartbeat_timeout_loop() => {}
+                }
+            });
+
+            let result = runner.clone().reader_loop().await;
+            runner.shutdown().await;
+            heartbeat.abort();
+            timeout_watch.abort();
+            let _ = heartbeat.await;
+            let _ = timeout_watch.await;
+
+            let end = match result {
+                Ok(ReaderEnd::Kicked(reason)) => Ok(SessionEnd::Kicked {
+                    session_id: session_id.clone(),
+                    reason,
+                }),
+                Ok(ReaderEnd::Closed) => Ok(SessionEnd::Disconnected { session_id }),
+                Err(e) => Err(e),
+            };
+            let _ = done_tx.send(end);
         });
 
-        let to = Arc::clone(&ctl);
-        let to_cancel = session_cancel.clone();
-        let timeout_watch = tokio::spawn(async move {
-            tokio::select! {
-                _ = to_cancel.cancelled() => {}
-                _ = to.heartbeat_timeout_loop() => {}
-            }
+        Ok(ActiveSession {
+            control: ctl,
+            done: done_rx,
+        })
+    }
+
+    pub fn request_disconnect(&self) {
+        self.cancel.cancel();
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub async fn close_tunnel(&self, name: &str) -> Result<()> {
+        let msg = Message::CloseTunnel(CloseTunnel {
+            tunnel_name: name.into(),
         });
+        let mut writer = self.writer.lock().await;
+        msg::write_msg(&mut *writer, &msg).await?;
+        drop(writer);
+        self.tunnels.remove(name);
+        (self.on_tunnel_removed)(name.into());
+        tracing::info!(name = %name, "tunnel closed");
+        Ok(())
+    }
 
-        let result = ctl.clone().reader_loop().await;
-        ctl.shutdown().await;
-        heartbeat.abort();
-        timeout_watch.abort();
-        let _ = heartbeat.await;
-        let _ = timeout_watch.await;
+    pub async fn register_tunnel(&self, tunnel: &TunnelConfig) -> Result<()> {
+        validate_tunnel(tunnel)?;
+        let msg = build_new_tunnel_message(tunnel)?;
+        self.tunnels.upsert(tunnel)?;
+        self.register_watch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .begin(&tunnel.name);
+        let mut writer = self.writer.lock().await;
+        msg::write_msg(&mut *writer, &msg).await?;
+        tracing::info!(name = %tunnel.name, protocol = %tunnel.protocol, "sent NewTunnel");
+        Ok(())
+    }
 
-        match result {
-            Ok(ReaderEnd::Kicked(reason)) => Ok(SessionEnd::Kicked {
-                session_id: resp.session_id,
-                reason,
-            }),
-            Ok(ReaderEnd::Closed) => Ok(SessionEnd::Disconnected {
-                session_id: resp.session_id,
-            }),
-            Err(e) => Err(e),
+    pub async fn close_all_tunnels(&self) {
+        for name in self.tunnels.tunnel_names() {
+            if let Err(e) = self.close_tunnel(&name).await {
+                tracing::warn!(name = %name, error = %e, "failed to close tunnel");
+            }
+        }
+    }
+
+    pub async fn apply_tunnel_changes(&self, changes: &TunnelChanges) -> ReloadOutcome {
+        let mut outcome = ReloadOutcome {
+            level: ReloadLevel::TunnelsOnly,
+            ..Default::default()
+        };
+
+        let mut stop_names = changes.removed.clone();
+        for tunnel in &changes.updated {
+            if !stop_names.iter().any(|n| n == &tunnel.name) {
+                stop_names.push(tunnel.name.clone());
+            }
+        }
+        stop_names.sort();
+        stop_names.dedup();
+
+        for name in &stop_names {
+            match self.close_tunnel(name).await {
+                Ok(()) => {
+                    if changes.removed.iter().any(|n| n == name) {
+                        outcome.removed.push(name.clone());
+                    }
+                }
+                Err(e) => outcome.failed.push((name.clone(), e.to_string())),
+            }
+        }
+
+        let mut started = Vec::new();
+        for tunnel in changes.updated.iter().chain(changes.added.iter()) {
+            if outcome.failed.iter().any(|(n, _)| n == &tunnel.name) {
+                continue;
+            }
+            let is_added = changes.added.iter().any(|t| t.name == tunnel.name);
+            match self.register_tunnel(tunnel).await {
+                Ok(()) => {
+                    started.push(tunnel.name.clone());
+                    if is_added {
+                        outcome.added.push(tunnel.name.clone());
+                    } else {
+                        outcome.updated.push(tunnel.name.clone());
+                    }
+                }
+                Err(e) => outcome.failed.push((tunnel.name.clone(), e.to_string())),
+            }
+        }
+
+        if !started.is_empty() {
+            let register_errors = self
+                .collect_register_errors(&started, Duration::from_secs(5))
+                .await;
+            for (name, err) in register_errors {
+                outcome.added.retain(|n| n != &name);
+                outcome.updated.retain(|n| n != &name);
+                if !outcome.failed.iter().any(|(n, _)| n == &name) {
+                    outcome.failed.push((name, err));
+                }
+            }
+        }
+
+        outcome
+    }
+
+    async fn collect_register_errors(
+        &self,
+        names: &[String],
+        timeout: Duration,
+    ) -> Vec<(String, String)> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            {
+                let watch = self
+                    .register_watch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                if !names.iter().any(|n| watch.pending.contains(n)) {
+                    return names
+                        .iter()
+                        .filter_map(|n| watch.errors.get(n).map(|e| (n.clone(), e.clone())))
+                        .collect();
+                }
+            }
+            if tokio::time::Instant::now() >= deadline {
+                let watch = self
+                    .register_watch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                return names
+                    .iter()
+                    .filter_map(|n| {
+                        if watch.pending.contains(n) {
+                            Some((n.clone(), "tunnel start timed out".into()))
+                        } else {
+                            watch.errors.get(n).map(|e| (n.clone(), e.clone()))
+                        }
+                    })
+                    .collect();
+            }
+            sleep(Duration::from_millis(50)).await;
         }
     }
 
@@ -166,101 +354,18 @@ impl Control {
     }
 
     async fn register_all_tunnels(&self) -> Result<()> {
-        for p in &self.cfg.tunnels {
-            let (local_ip, local_port) = p.service_host_port()?;
-            if p.requires_local_service() && local_port == 0 {
-                return Err(anyhow!(
-                    "tunnel `{}` requires service = \"host:port\" (local backend)",
-                    p.name
-                ));
-            }
-            if p.remote_port == 0 && matches!(p.protocol.as_str(), "tcp" | "udp") {
-                return Err(anyhow!(
-                    "tunnel `{}` type {} requires remotePort > 0",
-                    p.name,
-                    p.protocol
-                ));
-            }
-            let msg = match p.protocol.as_str() {
-                "tcp" => Message::NewTunnel(new_tunnel_base(
-                    &p.name,
-                    "tcp",
-                    p.remote_port as i32,
-                    &local_ip,
-                    local_port,
-                    &p.transport,
-                    |_| {},
-                )),
-                "udp" => Message::NewTunnel(new_tunnel_base(
-                    &p.name,
-                    "udp",
-                    p.remote_port as i32,
-                    &local_ip,
-                    local_port,
-                    &p.transport,
-                    |_| {},
-                )),
-                "http" => Message::NewTunnel(new_tunnel_base(
-                    &p.name,
-                    "http",
-                    0,
-                    &local_ip,
-                    local_port,
-                    &p.transport,
-                    |np| {
-                        np.domains = p.domains.clone();
-                        np.locations = p.locations.clone();
-                        np.basic_auth_user = p.basic_auth_user.clone();
-                        np.basic_auth_password = p.basic_auth_password.clone();
-                        np.host_header_rewrite = p.host_header_rewrite.clone();
-                        np.route_by_http_user = p.route_by_http_user.clone();
-                    },
-                )),
-                "https" => Message::NewTunnel(new_tunnel_base(
-                    &p.name,
-                    "https",
-                    0,
-                    &local_ip,
-                    local_port,
-                    &p.transport,
-                    |np| {
-                        np.domains = p.domains.clone();
-                    },
-                )),
-                other => {
-                    tracing::warn!(name = %p.name, protocol = %other, "skip unsupported tunnel protocol");
-                    continue;
-                }
-            };
+        let tunnels = self.cfg.read().await.tunnels.clone();
+        for p in &tunnels {
+            validate_tunnel(p)?;
+            let msg = build_new_tunnel_message(p)?;
+            self.tunnels.upsert(p)?;
             let mut writer = self.writer.lock().await;
             msg::write_msg(&mut *writer, &msg).await?;
-            match p.protocol.as_str() {
-                "tcp" => tracing::info!(
-                    name = %p.name,
-                    service = %p.service,
-                    remote_port = p.remote_port,
-                    "sent NewTunnel"
-                ),
-                "udp" => tracing::info!(
-                    name = %p.name,
-                    service = %p.service,
-                    remote_port = p.remote_port,
-                    "sent NewTunnel udp"
-                ),
-                "http" => tracing::info!(
-                    name = %p.name,
-                    service = %p.service,
-                    domains = ?p.domains,
-                    "sent NewTunnel http"
-                ),
-                "https" => tracing::info!(
-                    name = %p.name,
-                    service = %p.service,
-                    domains = ?p.domains,
-                    "sent NewTunnel https"
-                ),
-                _ => {}
-            }
+            tracing::info!(
+                name = %p.name,
+                protocol = %p.protocol,
+                "sent NewTunnel"
+            );
         }
         Ok(())
     }
@@ -307,7 +412,12 @@ impl Control {
                 }
                 Message::NewTunnelResp(resp) => {
                     if resp.error.is_empty() {
-                        let remote = normalize_remote_addr(&self.cfg.server, &resp.remote_addr);
+                        self.register_watch
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .finish(&resp.tunnel_name, None);
+                        let server = self.cfg.read().await.server.clone();
+                        let remote = normalize_remote_addr(&server, &resp.remote_addr);
                         tracing::info!(
                             name = %resp.tunnel_name,
                             remote = %remote,
@@ -315,6 +425,10 @@ impl Control {
                         );
                         (self.on_tunnel_remote)(resp.tunnel_name.clone(), remote);
                     } else {
+                        self.register_watch
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .finish(&resp.tunnel_name, Some(resp.error.clone()));
                         tracing::error!(
                             name = %resp.tunnel_name,
                             error = %resp.error,
@@ -348,8 +462,9 @@ impl Control {
             }
             tick.tick().await;
             let timestamp = now_secs();
+            let token = self.cfg.read().await.auth.token.clone();
             let ping = Ping {
-                auth_digest: auth::compute_auth_digest(&self.cfg.auth.token, timestamp),
+                auth_digest: auth::compute_auth_digest(&token, timestamp),
                 timestamp,
             };
             let mut writer = self.writer.lock().await;
@@ -384,12 +499,17 @@ impl Control {
     }
 
     fn effective_ping_interval(&self) -> i64 {
-        let hb = self.cfg.transport.heartbeat_interval;
+        let transport = self
+            .cfg
+            .try_read()
+            .map(|c| c.transport.clone())
+            .unwrap_or_default();
+        let hb = transport.heartbeat_interval;
         if hb > 0 {
             return hb;
         }
-        if self.cfg.transport.tcp_mux {
-            let mux_ka = self.cfg.transport.mux_keepalive_secs;
+        if transport.tcp_mux {
+            let mux_ka = transport.mux_keepalive_secs;
             if mux_ka > 0 {
                 return mux_ka;
             }
@@ -398,12 +518,17 @@ impl Control {
     }
 
     fn effective_pong_timeout(&self) -> i64 {
-        let hb_to = self.cfg.transport.heartbeat_timeout;
+        let transport = self
+            .cfg
+            .try_read()
+            .map(|c| c.transport.clone())
+            .unwrap_or_default();
+        let hb_to = transport.heartbeat_timeout;
         if hb_to > 0 {
             return hb_to;
         }
-        if self.cfg.transport.heartbeat_interval <= 0 && self.cfg.transport.tcp_mux {
-            let mux_ka = self.cfg.transport.mux_keepalive_secs;
+        if transport.heartbeat_interval <= 0 && transport.tcp_mux {
+            let mux_ka = transport.mux_keepalive_secs;
             if mux_ka > 0 {
                 return mux_ka.saturating_mul(3);
             }
@@ -415,11 +540,15 @@ impl Control {
         let mut data = self.connector.open().await?;
 
         let timestamp = now_secs();
+        let (session_id, token) = {
+            let cfg = self.cfg.read().await;
+            (self.session_id.clone(), cfg.auth.token.clone())
+        };
         msg::write_msg(
             &mut data,
             &Message::NewDataConn(NewDataConn {
-                session_id: self.session_id.clone(),
-                auth_digest: auth::compute_auth_digest(&self.cfg.auth.token, timestamp),
+                session_id,
+                auth_digest: auth::compute_auth_digest(&token, timestamp),
                 timestamp,
             }),
         )
@@ -498,6 +627,90 @@ fn normalize_remote_addr(server_addr: &str, remote_addr: &str) -> String {
         }
     }
     remote.to_string()
+}
+
+fn validate_tunnel(p: &TunnelConfig) -> Result<()> {
+    let (_local_ip, local_port) = p.service_host_port()?;
+    if p.requires_local_service() && local_port == 0 {
+        return Err(anyhow!(
+            "tunnel `{}` requires service = \"host:port\" (local backend)",
+            p.name
+        ));
+    }
+    if p.remote_port == 0 && matches!(p.protocol.as_str(), "tcp" | "udp") {
+        return Err(anyhow!(
+            "tunnel `{}` type {} requires remotePort > 0",
+            p.name,
+            p.protocol
+        ));
+    }
+    match p.protocol.as_str() {
+        "tcp" | "udp" | "http" | "https" => Ok(()),
+        other => Err(anyhow!(
+            "tunnel `{}` unsupported protocol {}",
+            p.name,
+            other
+        )),
+    }
+}
+
+fn build_new_tunnel_message(p: &TunnelConfig) -> Result<Message> {
+    let (local_ip, local_port) = p.service_host_port()?;
+    let msg = match p.protocol.as_str() {
+        "tcp" => Message::NewTunnel(new_tunnel_base(
+            &p.name,
+            "tcp",
+            p.remote_port as i32,
+            &local_ip,
+            local_port,
+            &p.transport,
+            |_| {},
+        )),
+        "udp" => Message::NewTunnel(new_tunnel_base(
+            &p.name,
+            "udp",
+            p.remote_port as i32,
+            &local_ip,
+            local_port,
+            &p.transport,
+            |_| {},
+        )),
+        "http" => Message::NewTunnel(new_tunnel_base(
+            &p.name,
+            "http",
+            0,
+            &local_ip,
+            local_port,
+            &p.transport,
+            |np| {
+                np.domains = p.domains.clone();
+                np.locations = p.locations.clone();
+                np.basic_auth_user = p.basic_auth_user.clone();
+                np.basic_auth_password = p.basic_auth_password.clone();
+                np.host_header_rewrite = p.host_header_rewrite.clone();
+                np.route_by_http_user = p.route_by_http_user.clone();
+            },
+        )),
+        "https" => Message::NewTunnel(new_tunnel_base(
+            &p.name,
+            "https",
+            0,
+            &local_ip,
+            local_port,
+            &p.transport,
+            |np| {
+                np.domains = p.domains.clone();
+            },
+        )),
+        other => {
+            return Err(anyhow!(
+                "tunnel `{}` unsupported protocol {}",
+                p.name,
+                other
+            ));
+        }
+    };
+    Ok(msg)
 }
 
 fn new_tunnel_base(

@@ -154,7 +154,7 @@ fn default_tcp_mux_keepalive() -> i64 {
     30
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuicOptions {
     #[serde(
         default = "default_quic_keepalive",

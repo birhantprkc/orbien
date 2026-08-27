@@ -126,8 +126,20 @@ pub fn config_saved(locale: Locale) -> String {
     msg(locale, "msg.config-saved")
 }
 
-pub fn config_saved_restarted(locale: Locale) -> String {
-    msg(locale, "msg.config-saved-restarted")
+pub fn config_saved_applied(locale: Locale) -> String {
+    msg(locale, "msg.config-saved-applied")
+}
+
+pub fn config_saved_reconnecting(locale: Locale) -> String {
+    msg(locale, "msg.config-saved-reconnecting")
+}
+
+pub fn reload_failed(locale: Locale, err: &str) -> String {
+    msg_fmt(locale, "msg.reload-failed", &[("{err}", err)])
+}
+
+pub fn reload_partial(locale: Locale) -> String {
+    msg(locale, "msg.reload-partial")
 }
 
 pub fn config_persist_failed(locale: Locale, err: &str) -> String {
