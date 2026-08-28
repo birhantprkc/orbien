@@ -1,6 +1,8 @@
 use crate::handle::ClientHandle;
 use crate::reload::ReloadOutcome;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
+#[cfg(unix)]
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::{Path, PathBuf};
