@@ -31,7 +31,7 @@ orbien reload -c conf/orbien.toml
 ```
 
 :::tip
-`orbien reload` 通过 Unix 套接字与运行中的 `orbien -c` 进程通信
+`orbien reload` 通过本地控制通道与运行中的 `orbien -c` 进程通信（Unix 套接字 / Windows Named Pipe）
 :::
 
 校验配置语法与字段（不连接服务端、不修改运行状态）：

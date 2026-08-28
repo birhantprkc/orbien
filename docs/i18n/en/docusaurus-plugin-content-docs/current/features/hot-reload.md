@@ -30,7 +30,7 @@ orbien reload -c conf/orbien.toml
 ```
 
 :::tip
-`orbien reload` talks to the running `orbien -c` process over a Unix socket.
+`orbien reload` talks to the running `orbien -c` process over a local control channel (Unix socket / Windows named pipe).
 :::
 
 Validate syntax and fields without connecting to the server or changing the running state:

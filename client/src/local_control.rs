@@ -4,13 +4,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::{Path, PathBuf};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio_util::sync::CancellationToken;
 
 const ENV_CONTROL_SOCKET: &str = "ORBIEN_CONTROL_SOCKET";
+#[cfg(not(windows))]
 const ENV_STATE_DIR: &str = "ORBIEN_STATE_DIR";
+#[cfg(not(windows))]
 const SOCKET_FILE: &str = "control.sock";
+#[cfg(windows)]
+const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\orbien-control";
 
 #[derive(Debug, Deserialize)]
 struct ControlRequest {
@@ -33,6 +36,11 @@ pub fn default_socket_path() -> PathBuf {
         return path;
     }
 
+    #[cfg(windows)]
+    {
+        return PathBuf::from(DEFAULT_PIPE_NAME);
+    }
+
     #[cfg(unix)]
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         let dir = dir.to_string_lossy();
@@ -41,9 +49,13 @@ pub fn default_socket_path() -> PathBuf {
         }
     }
 
-    state_dir().join("run").join(SOCKET_FILE)
+    #[cfg(not(windows))]
+    {
+        return state_dir().join("run").join(SOCKET_FILE);
+    }
 }
 
+#[cfg(not(windows))]
 fn state_dir() -> PathBuf {
     if let Some(dir) = env_path(ENV_STATE_DIR) {
         return dir;
@@ -66,6 +78,7 @@ fn state_dir() -> PathBuf {
     std::env::temp_dir().join("orbien")
 }
 
+#[cfg(not(windows))]
 fn user_home() -> Option<PathBuf> {
     for key in ["HOME", "USERPROFILE"] {
         if let Some(value) = std::env::var_os(key) {
@@ -87,6 +100,7 @@ fn env_path(name: &str) -> Option<PathBuf> {
     }
 }
 
+#[cfg(unix)]
 fn is_stale_socket_error(err: &io::Error) -> bool {
     matches!(
         err.kind(),
@@ -96,54 +110,61 @@ fn is_stale_socket_error(err: &io::Error) -> bool {
     )
 }
 
-async fn prepare_socket(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create socket dir {}", parent.display()))?;
-    }
-
-    if path.exists() {
-        match UnixStream::connect(path).await {
-            Ok(stream) => {
-                drop(stream);
-                bail!(
-                    "control socket {} is already in use; another orbien client may be running",
-                    path.display()
-                );
-            }
-            Err(e) if is_stale_socket_error(&e) => {
-                std::fs::remove_file(path)
-                    .with_context(|| format!("remove stale control socket {}", path.display()))?;
-            }
-            Err(e) => {
-                return Err(e).with_context(|| format!("probe control socket {}", path.display()));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn restrict_socket_permissions(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    }
-    let _ = path;
-    Ok(())
-}
-
 pub async fn serve(
     socket_path: PathBuf,
     handle: ClientHandle,
     cancel: CancellationToken,
 ) -> Result<()> {
-    prepare_socket(&socket_path).await?;
+    #[cfg(unix)]
+    {
+        serve_unix(socket_path, handle, cancel).await
+    }
+    #[cfg(windows)]
+    {
+        serve_windows(socket_path, handle, cancel).await
+    }
+}
+
+#[cfg(unix)]
+async fn serve_unix(
+    socket_path: PathBuf,
+    handle: ClientHandle,
+    cancel: CancellationToken,
+) -> Result<()> {
+    use tokio::net::{UnixListener, UnixStream};
+
+    if let Some(parent) = socket_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create socket dir {}", parent.display()))?;
+    }
+
+    if socket_path.exists() {
+        match UnixStream::connect(&socket_path).await {
+            Ok(stream) => {
+                drop(stream);
+                bail!(
+                    "control socket {} is already in use; another orbien client may be running",
+                    socket_path.display()
+                );
+            }
+            Err(e) if is_stale_socket_error(&e) => {
+                std::fs::remove_file(&socket_path).with_context(|| {
+                    format!("remove stale control socket {}", socket_path.display())
+                })?;
+            }
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("probe control socket {}", socket_path.display()));
+            }
+        }
+    }
 
     let listener = UnixListener::bind(&socket_path)
         .with_context(|| format!("bind control socket {}", socket_path.display()))?;
-    restrict_socket_permissions(&socket_path)?;
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600))?;
+    }
 
     tracing::info!(path = %socket_path.display(), "control socket listening");
 
@@ -166,8 +187,49 @@ pub async fn serve(
     Ok(())
 }
 
-async fn handle_connection(stream: UnixStream, handle: ClientHandle) -> Result<()> {
-    let (reader, mut writer) = stream.into_split();
+#[cfg(windows)]
+async fn serve_windows(
+    socket_path: PathBuf,
+    handle: ClientHandle,
+    cancel: CancellationToken,
+) -> Result<()> {
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    let name = socket_path.to_string_lossy().into_owned();
+    tracing::info!(path = %name, "control named pipe listening");
+
+    let mut server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(&name)
+        .with_context(|| format!("create control named pipe {name}"))?;
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => break,
+            connected = server.connect() => {
+                connected.with_context(|| format!("accept control named pipe {name}"))?;
+                let connected_server = server;
+                server = ServerOptions::new()
+                    .create(&name)
+                    .with_context(|| format!("recreate control named pipe {name}"))?;
+                let hc = handle.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_connection(connected_server, hc).await {
+                        tracing::debug!(error = %e, "control connection ended");
+                    }
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_connection<S>(stream: S, handle: ClientHandle) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let (reader, mut writer) = tokio::io::split(stream);
     let mut lines = BufReader::new(reader).lines();
     let line = match lines.next_line().await? {
         Some(l) if !l.trim().is_empty() => l,
@@ -222,13 +284,13 @@ async fn handle_reload(handle: &ClientHandle, config: Option<&str>) -> ControlRe
 
 pub async fn reload_via_socket(config_path: &Path) -> Result<ReloadOutcome> {
     let socket_path = default_socket_path();
-    let stream = UnixStream::connect(&socket_path).await.with_context(|| {
+    let stream = connect_control(&socket_path).await.with_context(|| {
         format!(
             "connect to control socket at {} (start orbien with -c first)",
             socket_path.display()
         )
     })?;
-    let (reader, mut writer) = stream.into_split();
+    let (reader, mut writer) = tokio::io::split(stream);
     let req = serde_json::json!({
         "op": "reload",
         "config": config_path.to_string_lossy(),
@@ -256,4 +318,38 @@ pub async fn reload_via_socket(config_path: &Path) -> Result<ReloadOutcome> {
             .error
             .unwrap_or_else(|| "reload failed".into())))
     }
+}
+
+#[cfg(unix)]
+async fn connect_control(socket_path: &Path) -> Result<tokio::net::UnixStream> {
+    Ok(tokio::net::UnixStream::connect(socket_path).await?)
+}
+
+#[cfg(windows)]
+async fn connect_control(
+    socket_path: &Path,
+) -> Result<tokio::net::windows::named_pipe::NamedPipeClient> {
+    use std::time::Duration;
+    use tokio::net::windows::named_pipe::ClientOptions;
+
+    let name = socket_path.to_string_lossy();
+    let mut last_err = None;
+    for _ in 0..20 {
+        match ClientOptions::new().open(name.as_ref()) {
+            Ok(client) => return Ok(client),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock || is_pipe_busy(&e) => {
+                last_err = Some(e);
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(last_err
+        .map(Into::into)
+        .unwrap_or_else(|| anyhow!("named pipe busy: {name}")))
+}
+
+#[cfg(windows)]
+fn is_pipe_busy(err: &io::Error) -> bool {
+    err.raw_os_error() == Some(231)
 }
