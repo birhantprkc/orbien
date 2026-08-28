@@ -1,9 +1,12 @@
-use crate::service::Service;
-use anyhow::{bail, Result};
+use crate::local_control;
+use crate::reload::ReloadOutcome;
+use crate::service::{ReloadRequest, Service};
+use anyhow::{anyhow, bail, Result};
 use orbien_core::config::ClientConfig;
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -25,10 +28,15 @@ impl ClientStatus {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct StartOptions {
+    pub local_control: bool,
+}
+
 #[derive(Debug, Default)]
 struct TunnelRemoteState {
     gen: u64,
-    by_name: HashMap<String, String>,
+    by_name: std::collections::HashMap<String, String>,
 }
 
 struct Inner {
@@ -38,6 +46,8 @@ struct Inner {
     tunnel_remotes: Mutex<TunnelRemoteState>,
     cancel: Mutex<Option<CancellationToken>>,
     join: Mutex<Option<JoinHandle<()>>>,
+    reload_tx: Mutex<Option<mpsc::Sender<ReloadRequest>>>,
+    reload_lock: tokio::sync::Mutex<()>,
 }
 
 #[derive(Clone)]
@@ -61,6 +71,8 @@ impl ClientHandle {
                 tunnel_remotes: Mutex::new(TunnelRemoteState::default()),
                 cancel: Mutex::new(None),
                 join: Mutex::new(None),
+                reload_tx: Mutex::new(None),
+                reload_lock: tokio::sync::Mutex::new(()),
             }),
         }
     }
@@ -94,7 +106,7 @@ impl ClientHandle {
     pub fn tunnel_remotes_if_changed(
         &self,
         since_gen: u64,
-    ) -> Option<(u64, HashMap<String, String>)> {
+    ) -> Option<(u64, std::collections::HashMap<String, String>)> {
         let g = self
             .inner
             .tunnel_remotes
@@ -132,6 +144,20 @@ impl ClientHandle {
         g.gen = g.gen.wrapping_add(1);
     }
 
+    fn remove_tunnel_remote(&self, name: String) {
+        if name.is_empty() {
+            return;
+        }
+        let mut g = self
+            .inner
+            .tunnel_remotes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if g.by_name.remove(&name).is_some() {
+            g.gen = g.gen.wrapping_add(1);
+        }
+    }
+
     fn enqueue_log(&self, line: String) {
         if let Ok(mut g) = self.inner.pending_logs.lock() {
             const MAX_PENDING: usize = 500;
@@ -155,50 +181,43 @@ impl ClientHandle {
         }
     }
 
-    pub async fn run_foreground(self, mut cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
-        cfg.prepare_runtime(&config_path);
-        cfg.validate()?;
-        let cancel = CancellationToken::new();
-        self.set_status(ClientStatus::Starting);
-        self.set_error(None);
-        self.clear_tunnel_remotes();
-        let result = Service::new(cfg, config_path)
-            .run(
-                cancel.clone(),
-                {
-                    let h = self.clone();
-                    move |st| h.set_status(st)
-                },
-                {
-                    let h = self.clone();
-                    move |line| {
-                        h.enqueue_log(line);
-                    }
-                },
-                {
-                    let h = self.clone();
-                    Arc::new(move |name, remote| h.set_tunnel_remote(name, remote))
-                },
-                {
-                    let h = self.clone();
-                    Arc::new(move || h.clear_tunnel_remotes())
-                },
-            )
-            .await;
-        self.clear_tunnel_remotes();
-        self.set_status(ClientStatus::Stopped);
-        if let Err(ref e) = result {
-            self.set_error(Some(e.to_string()));
-        }
-        result
+    fn clear_reload_tx(&self) {
+        *self
+            .inner
+            .reload_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
     }
 
-    pub fn start(&self, mut cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
+    fn set_reload_tx(&self, tx: mpsc::Sender<ReloadRequest>) {
+        *self
+            .inner
+            .reload_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+    }
+
+    pub async fn run_foreground(
+        self,
+        cfg: ClientConfig,
+        config_path: PathBuf,
+        opts: StartOptions,
+    ) -> Result<()> {
+        self.run_inner(cfg, config_path, opts, true).await
+    }
+
+    pub fn start_with(
+        &self,
+        mut cfg: ClientConfig,
+        config_path: PathBuf,
+        opts: StartOptions,
+    ) -> Result<()> {
         if self.status().is_active() {
             bail!("client already running");
         }
         cfg.prepare_runtime(&config_path);
         cfg.validate()?;
+
         let cancel = CancellationToken::new();
         *self.inner.cancel.lock().unwrap_or_else(|e| e.into_inner()) = Some(cancel.clone());
         self.set_status(ClientStatus::Starting);
@@ -207,39 +226,14 @@ impl ClientHandle {
 
         let handle = self.clone();
         let join = tokio::spawn(async move {
-            let on_status = {
-                let h = handle.clone();
-                move |st| h.set_status(st)
-            };
-            let on_log = {
-                let h = handle.clone();
-                move |line: String| {
-                    h.enqueue_log(line);
-                }
-            };
-            let on_tunnel_remote: Arc<dyn Fn(String, String) + Send + Sync> = {
-                let h = handle.clone();
-                Arc::new(move |name: String, remote: String| h.set_tunnel_remote(name, remote))
-            };
-            let on_remotes_clear: Arc<dyn Fn() + Send + Sync> = {
-                let h = handle.clone();
-                Arc::new(move || h.clear_tunnel_remotes())
-            };
-            let result = Service::new(cfg, config_path)
-                .run(
-                    cancel,
-                    on_status,
-                    on_log,
-                    on_tunnel_remote,
-                    on_remotes_clear,
-                )
-                .await;
+            let result = handle.run_inner(cfg, config_path, opts, false).await;
             if let Err(e) = result {
                 tracing::error!(error = %e, "client service ended with error");
                 handle.set_error(Some(e.to_string()));
             }
             handle.clear_tunnel_remotes();
             handle.set_status(ClientStatus::Stopped);
+            handle.clear_reload_tx();
             *handle
                 .inner
                 .cancel
@@ -248,6 +242,136 @@ impl ClientHandle {
         });
         *self.inner.join.lock().unwrap_or_else(|e| e.into_inner()) = Some(join);
         Ok(())
+    }
+
+    pub fn start(&self, cfg: ClientConfig, config_path: PathBuf) -> Result<()> {
+        self.start_with(cfg, config_path, StartOptions::default())
+    }
+
+    async fn run_inner(
+        &self,
+        mut cfg: ClientConfig,
+        config_path: PathBuf,
+        opts: StartOptions,
+        is_foreground: bool,
+    ) -> Result<()> {
+        cfg.prepare_runtime(&config_path);
+        cfg.validate()?;
+
+        let cancel = if is_foreground {
+            let token = CancellationToken::new();
+            *self.inner.cancel.lock().unwrap_or_else(|e| e.into_inner()) = Some(token.clone());
+            token
+        } else {
+            self.inner
+                .cancel
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .ok_or_else(|| anyhow!("missing cancel token"))?
+        };
+
+        if is_foreground {
+            self.set_status(ClientStatus::Starting);
+            self.set_error(None);
+            self.clear_tunnel_remotes();
+        }
+
+        let (reload_tx, mut reload_rx) = mpsc::channel(4);
+        self.set_reload_tx(reload_tx);
+        let shared_cfg = Arc::new(RwLock::new(cfg.clone()));
+
+        if opts.local_control {
+            let socket_path = local_control::default_socket_path();
+            let hc = self.clone();
+            let cc = cancel.clone();
+            tokio::spawn(async move {
+                if let Err(e) = local_control::serve(socket_path, hc, cc).await {
+                    tracing::warn!(error = %e, "local control socket stopped");
+                }
+            });
+        }
+
+        let on_status = {
+            let h = self.clone();
+            move |st| h.set_status(st)
+        };
+        let on_log = {
+            let h = self.clone();
+            move |line: String| h.enqueue_log(line)
+        };
+        let on_tunnel_remote: Arc<dyn Fn(String, String) + Send + Sync> = {
+            let h = self.clone();
+            Arc::new(move |name, remote| h.set_tunnel_remote(name, remote))
+        };
+        let on_tunnel_removed: Arc<dyn Fn(String) + Send + Sync> = {
+            let h = self.clone();
+            Arc::new(move |name| h.remove_tunnel_remote(name))
+        };
+        let on_remotes_clear: Arc<dyn Fn() + Send + Sync> = {
+            let h = self.clone();
+            Arc::new(move || h.clear_tunnel_remotes())
+        };
+
+        let result = Service::new(cfg, config_path.clone())
+            .run(
+                cancel.clone(),
+                &mut reload_rx,
+                shared_cfg,
+                on_status,
+                on_log,
+                on_tunnel_remote,
+                on_tunnel_removed,
+                on_remotes_clear,
+            )
+            .await;
+
+        if is_foreground {
+            self.clear_tunnel_remotes();
+            self.set_status(ClientStatus::Stopped);
+            self.clear_reload_tx();
+            *self.inner.cancel.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            if let Err(ref e) = result {
+                self.set_error(Some(e.to_string()));
+            }
+        }
+        result
+    }
+
+    pub async fn reload(&self, cfg: ClientConfig, config_path: PathBuf) -> Result<ReloadOutcome> {
+        if !self.status().is_active() {
+            bail!("client is not running");
+        }
+        let _guard = self.inner.reload_lock.lock().await;
+        self.send_reload(cfg, config_path).await
+    }
+
+    pub async fn reload_from_path(&self, path: &Path) -> Result<ReloadOutcome> {
+        let cfg = ClientConfig::load(path)?;
+        self.reload(cfg, path.to_path_buf()).await
+    }
+
+    async fn send_reload(&self, cfg: ClientConfig, config_path: PathBuf) -> Result<ReloadOutcome> {
+        let tx = self
+            .inner
+            .reload_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| anyhow!("reload channel not ready"))?;
+        let (reply_tx, reply_rx) = oneshot::channel();
+        tx.send(ReloadRequest {
+            cfg,
+            config_path,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|_| anyhow!("reload channel closed"))?;
+        match tokio::time::timeout(Duration::from_secs(120), reply_rx).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(anyhow!("reload response channel closed")),
+            Err(_) => Err(anyhow!("reload timed out after 120s")),
+        }
     }
 
     pub async fn stop(&self) {
@@ -285,5 +409,6 @@ impl ClientHandle {
             self.set_status(ClientStatus::Stopped);
         }
         self.clear_tunnel_remotes();
+        self.clear_reload_tx();
     }
 }

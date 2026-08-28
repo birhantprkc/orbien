@@ -25,8 +25,14 @@ fn main() {
     }
 
     generate_slint_version(&version);
-    generate_slint_i18n();
-    slint_build::compile("ui/app.slint").expect("slint compile failed");
+    let zh = generate_slint_i18n();
+    verify_font_assets(&zh);
+    slint_build::compile_with_config(
+        "ui/app.slint",
+        slint_build::CompilerConfiguration::new()
+            .embed_resources(slint_build::EmbedResourcesKind::EmbedFiles),
+    )
+    .expect("slint compile failed");
 }
 
 fn generate_slint_version(version: &str) {
@@ -57,7 +63,7 @@ fn embed_macos_plist(version: &str) {
     );
 }
 
-fn generate_slint_i18n() {
+fn generate_slint_i18n() -> BTreeMap<String, String> {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zh_path = manifest.join("i18n/zh_CN.properties");
     let en_path = manifest.join("i18n/en_US.properties");
@@ -78,6 +84,46 @@ fn generate_slint_i18n() {
 
     let out = manifest.join("ui/i18n.slint");
     fs::write(&out, render_slint(&keys, &zh, &en)).expect("write ui/i18n.slint");
+    zh
+}
+
+fn verify_font_assets(zh: &BTreeMap<String, String>) {
+    let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let fonts = manifest.join("assets/fonts");
+    for name in [
+        "NotoSansSC-Regular.subset.otf",
+        "NotoSansSC-Bold.subset.otf",
+        "OFL.txt",
+        "subset-manifest.json",
+    ] {
+        let path = fonts.join(name);
+        assert!(
+            path.is_file(),
+            "missing font asset {} — run: make desktop-font-subset",
+            path.display()
+        );
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+
+    let meta =
+        fs::read_to_string(fonts.join("subset-manifest.json")).expect("read subset-manifest.json");
+    if meta.contains("\"i18n-gb2312") {
+        for (key, value) in zh {
+            for ch in value.chars().filter(|c| needs_embedded_cjk_coverage(*c)) {
+                let needle = format!("\"{ch}\"");
+                assert!(
+                    meta.contains(&needle),
+                    "zh_CN key '{key}' uses '{ch}' missing from font subset; \
+                     run: make desktop-font-subset"
+                );
+            }
+        }
+    }
+}
+
+fn needs_embedded_cjk_coverage(ch: char) -> bool {
+    matches!(ch as u32, 0x3000..=0x303F | 0x4E00..=0x9FFF | 0xFF00..=0xFFEF)
+        || matches!(ch, '…' | '·' | '—')
 }
 
 fn parse_properties(raw: &str) -> BTreeMap<String, String> {

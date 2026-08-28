@@ -115,7 +115,7 @@ export component AboutPage inherits Rectangle {
             border-width: 1px;
             border-color: Theme.line;
             drop-shadow-blur: 14px;
-            drop-shadow-color: #1e3a5f0f;
+            drop-shadow-color: Theme.shadow;
             drop-shadow-offset-y: 4px;
             clip: true;
 
@@ -229,8 +229,8 @@ export component AboutPage inherits Rectangle {
                             AboutLink {
                                 label: Tr.about-docs;
                                 kind: "doc";
-                                fg: #059669;
-                                bg: #0596691a;
+                                fg: Theme.link-docs;
+                                bg: Theme.link-docs-bg;
                                 activated => { root.open-docs(); }
                             }
 
@@ -238,7 +238,7 @@ export component AboutPage inherits Rectangle {
                                 label: Tr.about-feedback;
                                 kind: "bug";
                                 fg: Theme.danger;
-                                bg: #e11d4814;
+                                bg: Theme.danger-soft;
                                 activated => { root.open-feedback(); }
                             }
 

@@ -1,4 +1,4 @@
-import { AboutSlint, Button } from "std-widgets.slint";
+import { AboutSlint, Button, Palette } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Tr } from "../i18n.slint";
 
@@ -12,6 +12,15 @@ export component AboutDialog inherits Window {
     icon: @image-url("../../assets/logo.png");
 
     callback close-clicked();
+
+    public function apply-theme(mode: int) {
+        Theme.mode = mode;
+        Palette.color-scheme = mode == 1 ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    init => {
+        Palette.color-scheme = Theme.mode == 1 ? ColorScheme.dark : ColorScheme.light;
+    }
 
     VerticalLayout {
         padding: 20px;

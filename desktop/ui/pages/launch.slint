@@ -34,9 +34,9 @@ component LaunchOrb inherits Rectangle {
         width: 112px;
         height: 112px;
         border-radius: 56px;
-        background: white;
+        background: Theme.orb-fill;
         drop-shadow-blur: 24px;
-        drop-shadow-color: #3b82f62e;
+        drop-shadow-color: Theme.orb-shadow;
         drop-shadow-offset-y: 8px;
 
         IconRocket {
@@ -110,7 +110,7 @@ export component LaunchPage inherits Rectangle {
         border-width: 1px;
         border-color: Theme.line;
         drop-shadow-blur: 18px;
-        drop-shadow-color: #1e3a5f0f;
+        drop-shadow-color: Theme.shadow;
         drop-shadow-offset-y: 6px;
         clip: true;
 
@@ -183,9 +183,9 @@ export component LaunchPage inherits Rectangle {
                                             width: 14px;
                                             height: 14px;
                                             border-radius: 7px;
-                                            background: root.running ? Theme.ok : #cbd5e1;
+                                            background: root.running ? Theme.ok : Theme.status-idle;
                                             border-width: 2px;
-                                            border-color: white;
+                                            border-color: Theme.status-ring;
                                         }
                                     }
 

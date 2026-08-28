@@ -1,3 +1,6 @@
+import "../assets/fonts/NotoSansSC-Regular.subset.otf";
+import "../assets/fonts/NotoSansSC-Bold.subset.otf";
+import { Palette } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Sidebar, AppPage } from "sidebar.slint";
 import { LaunchPage } from "pages/launch.slint";
@@ -10,9 +13,11 @@ import { ToastHost } from "toast.slint";
 import { Tr } from "i18n.slint";
 import { AppMeta } from "version.slint";
 
-export { AppPage, TunnelRow, LogLine, Tr, AboutDialog, AppMeta }
+export { AppPage, TunnelRow, LogLine, Tr, AboutDialog, AppMeta, Theme }
 export component AppWindow inherits Window {
     title: "Orbien Desktop";
+    default-font-family: "Noto Sans SC";
+    default-font-size: 13px;
     icon: @image-url("../assets/app-icons/128x128.png");
     preferred-width: 960px;
     preferred-height: 640px;
@@ -48,6 +53,31 @@ export component AppWindow inherits Window {
                     }
                 }
             }
+
+            Menu {
+                title: Tr.menu-appearance;
+                MenuItem {
+                    title: (root.theme-index == 0 ? "✓  " : "    ") + Tr.menu-theme-light;
+                    activated => {
+                        if root.theme-index == 0 {
+                            return;
+                        }
+                        root.theme-index = 0;
+                        root.theme-changed(0);
+                    }
+                }
+
+                MenuItem {
+                    title: (root.theme-index == 1 ? "✓  " : "    ") + Tr.menu-theme-dark;
+                    activated => {
+                        if root.theme-index == 1 {
+                            return;
+                        }
+                        root.theme-index = 1;
+                        root.theme-changed(1);
+                    }
+                }
+            }
         }
 
         Menu {
@@ -62,6 +92,8 @@ export component AppWindow inherits Window {
     // navigation
     in-out property <AppPage> page: AppPage.launch;
     in-out property <int> locale-index: 0;
+    /// 0 = light (default), 1 = dark
+    in-out property <int> theme-index: 0;
     in-out property <string> sidebar-cpu: "—";
     in-out property <string> sidebar-mem: "—";
 
@@ -133,6 +165,7 @@ export component AppWindow inherits Window {
     in-out property <int> log-scroll-gen: 0;
 
     callback locale-changed(int);
+    callback theme-changed(int);
     callback show-about();
     callback open-url(string);
     callback toggle-client();
@@ -152,6 +185,16 @@ export component AppWindow inherits Window {
 
     changed locale-index => {
         Tr.locale-index = root.locale-index;
+    }
+
+    changed theme-index => {
+        Theme.mode = root.theme-index;
+        Palette.color-scheme = root.theme-index == 1 ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    init => {
+        Theme.mode = root.theme-index;
+        Palette.color-scheme = root.theme-index == 1 ? ColorScheme.dark : ColorScheme.light;
     }
 
     changed page => {

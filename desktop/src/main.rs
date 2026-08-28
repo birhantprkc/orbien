@@ -6,6 +6,7 @@ mod log_buffer;
 mod pick_file;
 mod process_stats;
 mod runtime;
+mod ui_prefs;
 
 use i18n::Locale;
 use log_buffer::{LogStore, UiSyncCursor};
@@ -16,11 +17,29 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+use ui_prefs::UiPrefs;
 
 slint::include_modules!();
 
 fn locale_of(ui: &AppWindow) -> Locale {
     Locale::from_index(ui.get_locale_index())
+}
+
+fn apply_theme(ui: &AppWindow, theme_index: i32) {
+    ui.set_theme_index(theme_index);
+}
+
+fn sync_about_theme(about: &AboutDialog, theme_index: i32) {
+    about.invoke_apply_theme(theme_index);
+}
+
+fn persist_prefs(ui: &AppWindow) {
+    let mut prefs = UiPrefs::default();
+    prefs.set_locale_index(ui.get_locale_index());
+    prefs.set_theme_index(ui.get_theme_index());
+    if let Err(e) = ui_prefs::save(&prefs) {
+        tracing::warn!(?e, "failed to save ui prefs");
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -157,11 +176,7 @@ fn apply_config_to_ui(ui: &AppWindow, cfg: &orbien_client::ClientConfig) {
     ui.set_tunnels(slint::ModelRc::new(slint::VecModel::from(rows)));
 }
 
-fn persist_tunnels(
-    ui: &AppWindow,
-    rows: &[TunnelRow],
-    started_at: &Arc<Mutex<Option<Instant>>>,
-) -> Result<bool, String> {
+fn persist_tunnels(ui: &AppWindow, rows: &[TunnelRow]) -> Result<(), String> {
     let tunnels = collect_tunnel_configs(rows).map_err(|e| e.to_string())?;
     let (cfg, path) = config_bridge::load_merge_tunnels(
         &ui.get_config_file_path(),
@@ -178,13 +193,11 @@ fn persist_tunnels(
     .map_err(|e| e.to_string())?;
     config_bridge::save(&path, &cfg).map_err(|e| e.to_string())?;
     ui.set_config_file_path(config_bridge::path_display(&path).into());
-    restart_if_running(ui, cfg, path, started_at, "tunnels updated")
+    apply_if_running_async(ui, cfg, path);
+    Ok(())
 }
 
-fn persist_server_config(
-    ui: &AppWindow,
-    started_at: &Arc<Mutex<Option<Instant>>>,
-) -> Result<bool, String> {
+fn persist_server_config(ui: &AppWindow) -> Result<(), String> {
     let model = ui.get_tunnels();
     let rows: Vec<TunnelRow> = (0..model.row_count())
         .filter_map(|i| model.row_data(i))
@@ -216,34 +229,62 @@ fn persist_server_config(
     .map_err(|e| e.to_string())?;
     config_bridge::save(&path, &cfg).map_err(|e| e.to_string())?;
     ui.set_config_file_path(config_bridge::path_display(&path).into());
-    restart_if_running(ui, cfg, path, started_at, "config updated")
+    apply_if_running_async(ui, cfg, path);
+    Ok(())
 }
 
-fn restart_if_running(
+fn apply_if_running_async(
     ui: &AppWindow,
     cfg: orbien_client::ClientConfig,
     path: std::path::PathBuf,
-    started_at: &Arc<Mutex<Option<Instant>>>,
-    reason: &str,
-) -> Result<bool, String> {
+) {
     if !runtime::status().is_active() {
-        return Ok(false);
+        return;
     }
+    push_log(ui, "INFO  applying reload");
+    let ui_weak = ui.as_weak();
+    runtime::reload_async(cfg, path, move |result| {
+        let Some(ui) = ui_weak.upgrade() else {
+            return;
+        };
+        let loc = locale_of(&ui);
+        match result {
+            Ok(outcome) => finish_reload_ui(&ui, loc, &outcome),
+            Err(e) => {
+                toast_err(&ui, i18n::reload_failed(loc, &e.to_string()));
+                push_log(&ui, &format!("ERROR reload failed: {e}"));
+            }
+        }
+    });
+}
+
+fn finish_reload_ui(ui: &AppWindow, loc: Locale, outcome: &orbien_client::ReloadOutcome) {
     push_log(
         ui,
-        &format!("INFO  applying changes via restart ({reason})"),
+        &format!(
+            "INFO  reload applied: +{} -{} ~{} mode={}",
+            outcome.added.len(),
+            outcome.removed.len(),
+            outcome.updated.len(),
+            outcome.level.label()
+        ),
     );
-    match runtime::restart(cfg, path) {
-        Ok(()) => {
-            *started_at.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-            ui.set_running(true);
-            Ok(true)
+    for (name, err) in &outcome.failed {
+        push_log(ui, &format!("WARN  reload tunnel {name}: {err}"));
+    }
+    if !outcome.succeeded() {
+        toast_err(&ui, i18n::reload_partial(loc));
+        return;
+    }
+    match outcome.level {
+        orbien_client::ReloadLevel::ReconnectControl => {
+            toast_ok(&ui, i18n::config_saved_reconnecting(loc));
         }
-        Err(e) => {
-            *started_at.lock().unwrap_or_else(|e| e.into_inner()) = None;
-            ui.set_running(false);
-            ui.set_running_label("—".into());
-            Err(e.to_string())
+        orbien_client::ReloadLevel::TunnelsOnly => {
+            toast_ok(&ui, i18n::config_saved_applied(loc));
+        }
+        _ => {
+            toast_ok(&ui, i18n::config_saved(loc));
         }
     }
 }
@@ -635,7 +676,10 @@ fn main() -> Result<(), slint::PlatformError> {
         .init();
 
     let ui = AppWindow::new()?;
+    let prefs = ui_prefs::load();
+    ui.set_locale_index(prefs.locale_index());
     let _ = ui.global::<Tr>().set_locale_index(ui.get_locale_index());
+    apply_theme(&ui, prefs.theme_index());
     let default_path = config_bridge::default_config_path();
     ui.set_config_file_path(config_bridge::path_display(&default_path).into());
 
@@ -877,7 +921,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    wire_tunnel_and_config(&ui, started_at.clone(), remotes_gen.clone());
+    wire_tunnel_and_config(&ui, remotes_gen.clone());
 
     let ui_weak = ui.as_weak();
     ui.on_show_about(move || {
@@ -887,6 +931,8 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Tr>().set_locale_index(ui.get_locale_index());
         match AboutDialog::new() {
             Ok(about) => {
+                about.global::<Tr>().set_locale_index(ui.get_locale_index());
+                sync_about_theme(&about, ui.get_theme_index());
                 let about_weak = about.as_weak();
                 about.on_close_clicked(move || {
                     if let Some(dlg) = about_weak.upgrade() {
@@ -957,11 +1003,7 @@ fn open_url(url: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn wire_tunnel_and_config(
-    ui: &AppWindow,
-    started_at: Arc<Mutex<Option<Instant>>>,
-    remotes_gen: Arc<Mutex<u64>>,
-) {
+fn wire_tunnel_and_config(ui: &AppWindow, remotes_gen: Arc<Mutex<u64>>) {
     let ui_weak = ui.as_weak();
     ui.on_tunnel_add(move || {
         if let Some(ui) = ui_weak.upgrade() {
@@ -980,7 +1022,6 @@ fn wire_tunnel_and_config(
     });
 
     let ui_weak = ui.as_weak();
-    let started_at_save = started_at.clone();
     let remotes_gen_save = remotes_gen.clone();
     ui.on_tunnel_save(move || {
         let Some(ui) = ui_weak.upgrade() else {
@@ -1081,18 +1122,16 @@ fn wire_tunnel_and_config(
             rows.push(row);
         }
 
-        match persist_tunnels(&ui, &rows, &started_at_save) {
-            Ok(restarted) => {
-                if !restarted {
+        match persist_tunnels(&ui, &rows) {
+            Ok(()) => {
+                if !runtime::status().is_active() {
                     retain_remote_addrs(&mut rows, &previous);
                 }
                 ui.set_tunnels(slint::ModelRc::new(slint::VecModel::from(rows)));
                 *remotes_gen_save.lock().unwrap_or_else(|e| e.into_inner()) = 0;
                 ui.set_tunnel_editor_open(false);
                 ui.set_tunnel_editing_index(-1);
-                if restarted {
-                    push_log(&ui, "INFO  tunnels saved (client restarted)");
-                } else {
+                if !runtime::status().is_active() {
                     push_log(&ui, "INFO  tunnels saved");
                 }
             }
@@ -1118,7 +1157,6 @@ fn wire_tunnel_and_config(
     });
 
     let ui_weak = ui.as_weak();
-    let started_at_del = started_at.clone();
     let remotes_gen_del = remotes_gen.clone();
     ui.on_tunnel_delete(move |index| {
         let Some(ui) = ui_weak.upgrade() else {
@@ -1136,16 +1174,14 @@ fn wire_tunnel_and_config(
             .map(|(_, r)| r.clone())
             .collect();
 
-        match persist_tunnels(&ui, &rows, &started_at_del) {
-            Ok(restarted) => {
-                if !restarted {
+        match persist_tunnels(&ui, &rows) {
+            Ok(()) => {
+                if !runtime::status().is_active() {
                     retain_remote_addrs(&mut rows, &previous);
                 }
                 ui.set_tunnels(slint::ModelRc::new(slint::VecModel::from(rows)));
                 *remotes_gen_del.lock().unwrap_or_else(|e| e.into_inner()) = 0;
-                if restarted {
-                    push_log(&ui, "INFO  tunnel deleted (client restarted)");
-                } else {
+                if !runtime::status().is_active() {
                     push_log(&ui, "INFO  tunnel deleted");
                 }
             }
@@ -1170,7 +1206,6 @@ fn wire_tunnel_and_config(
     });
 
     let ui_weak = ui.as_weak();
-    let started_at_cfg = started_at.clone();
     let remotes_gen_cfg = remotes_gen.clone();
     ui.on_config_save(move || {
         let Some(ui) = ui_weak.upgrade() else {
@@ -1189,12 +1224,10 @@ fn wire_tunnel_and_config(
             toast_err(&ui, msg);
             return;
         }
-        match persist_server_config(&ui, &started_at_cfg) {
-            Ok(restarted) => {
-                if restarted {
+        match persist_server_config(&ui) {
+            Ok(()) => {
+                if runtime::status().is_active() {
                     *remotes_gen_cfg.lock().unwrap_or_else(|e| e.into_inner()) = 0;
-                    toast_ok(&ui, i18n::config_saved_restarted(loc));
-                    push_log(&ui, "INFO  config saved (client restarted)");
                 } else {
                     toast_ok(&ui, i18n::config_saved(loc));
                     push_log(&ui, "INFO  config saved");
@@ -1278,6 +1311,17 @@ fn wire_tunnel_and_config(
             ui.global::<Tr>().set_locale_index(index);
             let label = if index == 0 { "zh-CN" } else { "en-US" };
             push_log(&ui, &format!("INFO  locale set to {label}"));
+            persist_prefs(&ui);
+        }
+    });
+
+    let ui_weak = ui.as_weak();
+    ui.on_theme_changed(move |index| {
+        if let Some(ui) = ui_weak.upgrade() {
+            apply_theme(&ui, index);
+            let label = if index == 1 { "dark" } else { "light" };
+            push_log(&ui, &format!("INFO  theme set to {label}"));
+            persist_prefs(&ui);
         }
     });
 }

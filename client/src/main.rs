@@ -1,19 +1,30 @@
 use anyhow::Result;
-use clap::Parser;
-use orbien_client::ClientHandle;
+use clap::{Parser, Subcommand};
+use orbien_client::{local_control, ClientConfig, ClientHandle, StartOptions};
+use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "orbien",
     about = "orbien client",
-    after_help = "Config:\n  \
-        orbien                         # try ./orbien.toml, then ./conf/orbien.toml\n  \
-        orbien -c conf/orbien.toml     # explicit path"
+    after_help = "Examples:\n  \
+        orbien -c conf/orbien.toml\n  \
+        orbien reload -c conf/orbien.toml\n  \
+        orbien verify -c conf/orbien.toml"
 )]
-struct Args {
-    #[arg(short, long, value_name = "FILE")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[arg(short, long, value_name = "FILE", global = true)]
     config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    Reload,
+    Verify,
 }
 
 #[tokio::main]
@@ -22,11 +33,19 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
         .init();
 
-    let args = Args::parse();
-    let config_path = orbien_client::resolve_client_config_path(args.config.as_deref())?;
-    tracing::info!(config = %config_path.display(), "loading config");
+    let cli = Cli::parse();
+    let config_path = orbien_client::resolve_client_config_path(cli.config.as_deref())?;
 
-    let cfg = orbien_client::ClientConfig::load(&config_path)?;
+    match cli.command {
+        None => run(config_path).await,
+        Some(Command::Reload) => reload(config_path).await,
+        Some(Command::Verify) => verify(config_path),
+    }
+}
+
+async fn run(config_path: PathBuf) -> Result<()> {
+    tracing::info!(config = %config_path.display(), "loading config");
+    let cfg = ClientConfig::load(&config_path)?;
     tracing::info!(
         server = %cfg.server_endpoint(),
         protocol = %cfg.transport.protocol,
@@ -34,5 +53,40 @@ async fn main() -> Result<()> {
         "starting orbien"
     );
 
-    ClientHandle::new().run_foreground(cfg, config_path).await
+    ClientHandle::new()
+        .run_foreground(
+            cfg,
+            config_path,
+            StartOptions {
+                local_control: true,
+            },
+        )
+        .await
+}
+
+async fn reload(config_path: PathBuf) -> Result<()> {
+    let outcome = local_control::reload_via_socket(&config_path).await?;
+    println!(
+        "reload ok: added={} removed={} updated={} mode={}",
+        outcome.added.len(),
+        outcome.removed.len(),
+        outcome.updated.len(),
+        outcome.level.label()
+    );
+    if outcome.connection_settings_changed {
+        println!("client settings applied via reconnect");
+    }
+    if !outcome.failed.is_empty() {
+        for (name, err) in &outcome.failed {
+            eprintln!("  failed {name}: {err}");
+        }
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+fn verify(config_path: PathBuf) -> Result<()> {
+    ClientConfig::load(&config_path)?;
+    println!("config ok: {}", config_path.display());
+    Ok(())
 }

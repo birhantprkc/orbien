@@ -3,7 +3,7 @@ use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientConfig {
     #[serde(default = "default_server")]
     pub server: String,
@@ -28,7 +28,7 @@ pub struct ClientConfig {
     pub udp_packet_size: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
     #[serde(default = "default_auth_type", rename = "type", alias = "auth_type")]
     pub auth_type: String,
@@ -36,7 +36,7 @@ pub struct AuthConfig {
     pub token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransportConfig {
     #[serde(default = "default_protocol")]
     pub protocol: String,
@@ -92,7 +92,7 @@ impl Default for TransportConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientTlsConfig {
     #[serde(default = "default_tls_enable")]
     pub enable: bool,
@@ -122,7 +122,7 @@ fn default_tls_enable() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TunnelConfig {
     pub name: String,
 
@@ -157,7 +157,7 @@ pub struct TunnelConfig {
     pub plugin: Option<PluginConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PluginConfig {
     #[serde(rename = "type", alias = "plugin_type")]
     pub plugin_type: String,
@@ -181,13 +181,13 @@ pub struct PluginConfig {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PluginRequestHeaders {
     #[serde(default)]
     pub set: std::collections::HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TunnelTransportConfig {
     #[serde(default)]
     pub bandwidth: f64,
@@ -401,9 +401,13 @@ impl ClientConfig {
                 self.transport.heartbeat_interval
             ));
         }
+        let mut seen_names = std::collections::HashSet::new();
         for t in &self.tunnels {
             if t.name.trim().is_empty() {
                 return Err(anyhow!("tunnel name is required"));
+            }
+            if !seen_names.insert(t.name.clone()) {
+                return Err(anyhow!("duplicate tunnel name `{}`", t.name));
             }
             let proto = t.protocol.trim().to_ascii_lowercase();
             if !matches!(proto.as_str(), "tcp" | "udp" | "http" | "https") {
@@ -563,5 +567,13 @@ impl ClientConfig {
                         | crate::transport::Protocol::Kcp
                 )
             )
+    }
+
+    pub fn connection_settings_eq(&self, other: &Self) -> bool {
+        self.server == other.server
+            && self.user == other.user
+            && self.auth == other.auth
+            && self.transport == other.transport
+            && self.udp_packet_size == other.udp_packet_size
     }
 }
