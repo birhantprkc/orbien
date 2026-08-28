@@ -1,3 +1,5 @@
+import "../assets/fonts/NotoSansSC-Regular.subset.otf";
+import "../assets/fonts/NotoSansSC-Bold.subset.otf";
 import { Palette } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Sidebar, AppPage } from "sidebar.slint";
@@ -14,6 +16,8 @@ import { AppMeta } from "version.slint";
 export { AppPage, TunnelRow, LogLine, Tr, AboutDialog, AppMeta, Theme }
 export component AppWindow inherits Window {
     title: "Orbien Desktop";
+    default-font-family: "Noto Sans SC";
+    default-font-size: 13px;
     icon: @image-url("../assets/app-icons/128x128.png");
     preferred-width: 960px;
     preferred-height: 640px;

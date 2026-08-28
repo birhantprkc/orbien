@@ -65,6 +65,8 @@ docs/.docusaurus
 
 /desktop/ui/i18n.slint
 /desktop/ui/version.slint
+/desktop/assets/fonts/source/
+/desktop/assets/fonts/.tools/
 /dev
 /bak/
 .idea/

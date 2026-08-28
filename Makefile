@@ -28,6 +28,15 @@ orbien:
 desktop-dev:
 	cargo run -p orbien-desktop
 
+desktop-font-subset:
+	python3 scripts/gen-desktop-font-subset.py
+
+desktop-font-subset-tiny:
+	python3 scripts/gen-desktop-font-subset.py --regular-only
+
+desktop-font-subset-full:
+	python3 scripts/gen-desktop-font-subset.py --full
+
 desktop-build:
 	cargo build --release -p orbien-desktop
 
