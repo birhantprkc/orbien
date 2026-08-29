@@ -170,19 +170,10 @@ pub struct PluginConfig {
     #[serde(default, rename = "hostHeaderRewrite", alias = "host_header_rewrite")]
     pub host_header_rewrite: String,
 
-    #[serde(default, rename = "requestHeaders", alias = "request_headers")]
-    pub request_headers: PluginRequestHeaders,
-
     #[serde(default)]
     pub username: String,
     #[serde(default)]
     pub password: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct PluginRequestHeaders {
-    #[serde(default)]
-    pub set: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

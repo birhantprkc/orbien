@@ -11,7 +11,6 @@ use tokio_rustls::TlsAcceptor;
 pub struct TlsTermPlugin {
     local_addr: String,
     host_header_rewrite: String,
-    request_headers: Vec<(String, String)>,
     acceptor: TlsAcceptor,
 }
 
@@ -30,13 +29,6 @@ impl TlsTermPlugin {
         let tls_cfg = load_or_generate_https_server_config(&cfg.cert_file, &cfg.key_file, &cn)?;
         let acceptor = TlsAcceptor::from(tls_cfg);
 
-        let request_headers: Vec<(String, String)> = cfg
-            .request_headers
-            .set
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
         tracing::info!(
             tunnel = %ctx.name,
             %local_addr,
@@ -47,7 +39,6 @@ impl TlsTermPlugin {
         Ok(Self {
             local_addr,
             host_header_rewrite: cfg.host_header_rewrite.clone(),
-            request_headers,
             acceptor,
         })
     }
@@ -73,7 +64,7 @@ impl Plugin for TlsTermPlugin {
 
         let (mut tls_r, mut tls_w) = tokio::io::split(tls);
         let mut head = read_http_request_head(&mut tls_r).await?;
-        apply_request_rewrites(&mut head, &self.host_header_rewrite, &self.request_headers)?;
+        apply_host_rewrite(&mut head, &self.host_header_rewrite)?;
 
         orbien_core::net::apply_x_forwarded_for(&mut head, &conn.src_addr, "https")?;
         local.write_all(&head).await?;
@@ -114,11 +105,11 @@ async fn read_http_request_head<R: AsyncReadExt + Unpin>(stream: &mut R) -> Resu
     }
 }
 
-fn apply_request_rewrites(
-    buf: &mut Vec<u8>,
-    host_rewrite: &str,
-    extra_headers: &[(String, String)],
-) -> Result<()> {
+fn apply_host_rewrite(buf: &mut Vec<u8>, host_rewrite: &str) -> Result<()> {
+    if host_rewrite.is_empty() {
+        return Ok(());
+    }
+
     let text = String::from_utf8_lossy(buf);
     let mut lines: Vec<String> = text.split_inclusive('\n').map(|s| s.to_string()).collect();
     if lines.is_empty() {
@@ -131,27 +122,17 @@ fn apply_request_rewrites(
         "\n"
     };
 
-    if !host_rewrite.is_empty() {
-        let mut replaced = false;
-        for line in lines.iter_mut().skip(1) {
-            let trimmed = line.trim_start_matches([' ', '\t']);
-            if trimmed.len() >= 5 && trimmed.as_bytes()[..5].eq_ignore_ascii_case(b"host:") {
-                *line = format!("Host: {host_rewrite}{ending}");
-                replaced = true;
-                break;
-            }
-        }
-        if !replaced {
-            lines.insert(1, format!("Host: {host_rewrite}{ending}"));
+    let mut replaced = false;
+    for line in lines.iter_mut().skip(1) {
+        let trimmed = line.trim_start_matches([' ', '\t']);
+        if trimmed.len() >= 5 && trimmed.as_bytes()[..5].eq_ignore_ascii_case(b"host:") {
+            *line = format!("Host: {host_rewrite}{ending}");
+            replaced = true;
+            break;
         }
     }
-
-    for (k, v) in extra_headers {
-        let blank_idx = lines
-            .iter()
-            .position(|l| l == "\r\n" || l == "\n")
-            .unwrap_or(lines.len());
-        lines.insert(blank_idx, format!("{k}: {v}{ending}"));
+    if !replaced {
+        lines.insert(1, format!("Host: {host_rewrite}{ending}"));
     }
 
     *buf = lines.join("").into_bytes();

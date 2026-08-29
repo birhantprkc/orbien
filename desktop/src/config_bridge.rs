@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Context, Result};
 use orbien_client::ClientConfig;
 use orbien_core::config::{
-    parse_host_port, ClientTlsConfig, PluginConfig, PluginRequestHeaders, TransportConfig,
-    TunnelConfig, TunnelTransportConfig,
+    parse_host_port, ClientTlsConfig, PluginConfig, TransportConfig, TunnelConfig,
+    TunnelTransportConfig,
 };
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -298,35 +297,6 @@ fn split_csv(raw: &str) -> Vec<String> {
         .collect()
 }
 
-fn parse_request_headers(raw: &str) -> PluginRequestHeaders {
-    let mut set = HashMap::new();
-    for part in raw.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        let Some((name, value)) = part.split_once(':') else {
-            continue;
-        };
-        let name = name.trim();
-        if name.is_empty() {
-            continue;
-        }
-        set.insert(name.to_string(), value.trim().to_string());
-    }
-    PluginRequestHeaders { set }
-}
-
-fn format_request_headers(headers: &PluginRequestHeaders) -> String {
-    let mut names: Vec<&String> = headers.set.keys().collect();
-    names.sort();
-    names
-        .into_iter()
-        .map(|name| format!("{name}: {}", headers.set[name]))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 fn is_tls_term_plugin(plugin_type: &str) -> bool {
     matches!(plugin_type.trim().to_ascii_lowercase().as_str(), "tls-term")
 }
@@ -354,7 +324,6 @@ pub fn tunnel_from_parts(
     plugin_cert_file: &str,
     plugin_key_file: &str,
     plugin_host_rewrite: &str,
-    plugin_request_headers: &str,
     plugin_username: &str,
     plugin_password: &str,
 ) -> Result<TunnelConfig> {
@@ -373,7 +342,6 @@ pub fn tunnel_from_parts(
             cert_file: plugin_cert_file.trim().into(),
             key_file: plugin_key_file.trim().into(),
             host_header_rewrite: plugin_host_rewrite.trim().into(),
-            request_headers: parse_request_headers(plugin_request_headers),
             username: String::new(),
             password: String::new(),
         })
@@ -466,9 +434,6 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         plugin_host_rewrite: tls_term
             .map(|pl| pl.host_header_rewrite.clone())
             .unwrap_or_default(),
-        plugin_request_headers: tls_term
-            .map(|pl| format_request_headers(&pl.request_headers))
-            .unwrap_or_default(),
         plugin_username: socks5.map(|pl| pl.username.clone()).unwrap_or_default(),
         plugin_password: socks5.map(|pl| pl.password.clone()).unwrap_or_default(),
     }
@@ -494,7 +459,6 @@ pub struct TunnelParts {
     pub plugin_cert_file: String,
     pub plugin_key_file: String,
     pub plugin_host_rewrite: String,
-    pub plugin_request_headers: String,
     pub plugin_username: String,
     pub plugin_password: String,
 }

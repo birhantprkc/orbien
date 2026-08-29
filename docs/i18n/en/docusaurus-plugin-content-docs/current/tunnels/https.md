@@ -88,26 +88,6 @@ keyFile = "/path/to/key.pem"
 hostHeaderRewrite = "127.0.0.1"
 ```
 
-## Example: Add request headers with TLS termination
-
-Under `tls-term`, append custom request headers to local HTTP:
-
-```toml
-[[tunnels]]
-name = "https-term"
-protocol = "https"
-domains = ["web.example.com"]
-
-[tunnels.plugin]
-type = "tls-term"
-service = "127.0.0.1:80"
-certFile = "/path/to/cert.pem"
-keyFile = "/path/to/key.pem"
-
-[tunnels.plugin.requestHeaders.set]
-X-From = "orbien"
-```
-
 ## Parameters
 
 | Parameter                        | Required    | Default  | Description                                                                                          |
@@ -121,7 +101,6 @@ X-From = "orbien"
 | `plugin.certFile`                | No          |          | Certificate path; empty uses a temporary self-signed cert                                            |
 | `plugin.keyFile`                 | No          |          | Private key path; empty uses a temporary self-signed cert                                            |
 | `plugin.hostHeaderRewrite`       | No          |          | Rewrite Host when forwarding to the local service; empty means no rewrite                            |
-| `plugin.requestHeaders.set`      | No          |          | Extra request headers to send to the backend; key-value pairs                                        |
 | `transport.bandwidth`            | No          | `0`      | Bandwidth cap (Mbps); `0` means unlimited                                                            |
 | `transport.bandwidthLimitSide`   | No          | `client` | Limit side: `client` / `server`                                                                      |
 | `transport.proxyProtocolVersion` | No          |          | PROXY Protocol: `v1` / `v2` (not available with `tls-term`)                                          |

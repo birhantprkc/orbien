@@ -90,10 +90,6 @@ certFile = "./certs/portal.crt"
 keyFile = "./certs/portal.key"
 hostHeaderRewrite = "127.0.0.1"
 
-[tunnels.plugin.requestHeaders.set]
-X-Forwarded-Proto = "https"
-X-Orbien-Tunnel = "portal"
-
 [[tunnels]]
 name = "socks5"
 protocol = "tcp"

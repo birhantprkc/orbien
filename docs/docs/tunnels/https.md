@@ -85,26 +85,6 @@ keyFile = "/path/to/key.pem"
 hostHeaderRewrite = "127.0.0.1"
 ```
 
-## 示例：TLS 终止时追加请求头
-
-在 `tls-term` 下，向本地 HTTP 追加自定义请求头：
-
-```toml
-[[tunnels]]
-name = "https-term"
-protocol = "https"
-domains = ["web.example.com"]
-
-[tunnels.plugin]
-type = "tls-term"
-service = "127.0.0.1:80"
-certFile = "/path/to/cert.pem"
-keyFile = "/path/to/key.pem"
-
-[tunnels.plugin.requestHeaders.set]
-X-From = "orbien"
-```
-
 ## 参数
 
 | 参数                               | 必填 | 默认值      | 说明                                            |
@@ -118,7 +98,6 @@ X-From = "orbien"
 | `plugin.certFile`                | 否  |          | 证书路径；空则临时自签                                   |
 | `plugin.keyFile`                 | 否  |          | 私钥路径；空则临时自签                                   |
 | `plugin.hostHeaderRewrite`       | 否  |          | 改写转发到本地服务的 Host；空表示不改                         |
-| `plugin.requestHeaders.set`      | 否  |          | 向后端追加请求头，键值对                                  |
 | `transport.bandwidth`            | 否  | `0`      | 带宽上限（Mbps）；`0` 表示不限制                          |
 | `transport.bandwidthLimitSide`   | 否  | `client` | 限速端：`client` / `server`                       |
 | `transport.proxyProtocolVersion` | 否  |          | PROXY Protocol：`v1` / `v2`（`tls-term` 不可用）    |
