@@ -346,11 +346,9 @@ pub fn tunnel_from_parts(
     basic_auth_user: &str,
     basic_auth_password: &str,
     host_header_rewrite: &str,
-    route_by_http_user: &str,
     bandwidth: &str,
     bandwidth_limit_side: &str,
     proxy_protocol_version: &str,
-    compression: &str,
     plugin_tls_term: bool,
     plugin_local_addr: &str,
     plugin_cert_file: &str,
@@ -405,7 +403,6 @@ pub fn tunnel_from_parts(
         basic_auth_user: basic_auth_user.trim().into(),
         basic_auth_password: basic_auth_password.trim().into(),
         host_header_rewrite: host_header_rewrite.trim().into(),
-        route_by_http_user: route_by_http_user.trim().into(),
         transport: TunnelTransportConfig {
             bandwidth: parse_bandwidth_mbps(bandwidth),
             bandwidth_limit_side: if bandwidth_limit_side.trim() == "server" {
@@ -414,11 +411,6 @@ pub fn tunnel_from_parts(
                 "client".into()
             },
             proxy_protocol_version: proxy_protocol_version.trim().into(),
-            compression: if compression.trim().eq_ignore_ascii_case("lz4") {
-                "lz4".into()
-            } else {
-                "none".into()
-            },
         },
         plugin,
     })
@@ -462,11 +454,9 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         basic_auth_user: p.basic_auth_user.clone(),
         basic_auth_password: p.basic_auth_password.clone(),
         host_header_rewrite: p.host_header_rewrite.clone(),
-        route_by_http_user: p.route_by_http_user.clone(),
         bandwidth: bandwidth_display(p.transport.bandwidth),
         bandwidth_limit_side: p.transport.bandwidth_limit_side.clone(),
         proxy_protocol_version: p.transport.proxy_protocol_version.clone(),
-        compression: p.transport.compression.clone(),
         plugin_tls_term: tls_term.is_some(),
         plugin_local_addr: tls_term
             .map(|pl| pl.service.clone())
@@ -496,11 +486,9 @@ pub struct TunnelParts {
     pub basic_auth_user: String,
     pub basic_auth_password: String,
     pub host_header_rewrite: String,
-    pub route_by_http_user: String,
     pub bandwidth: String,
     pub bandwidth_limit_side: String,
     pub proxy_protocol_version: String,
-    pub compression: String,
     pub plugin_tls_term: bool,
     pub plugin_local_addr: String,
     pub plugin_cert_file: String,

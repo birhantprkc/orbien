@@ -20,11 +20,9 @@ export component TunnelPage inherits Rectangle {
     in-out property <string> edit-basic-auth-user: "";
     in-out property <string> edit-basic-auth-password: "";
     in-out property <string> edit-host-header-rewrite: "";
-    in-out property <string> edit-route-by-http-user: "";
     in-out property <string> edit-bandwidth-limit: "";
     in-out property <int> edit-bandwidth-side-index: 0;
     in-out property <int> edit-proxy-protocol-index: 0;
-    in-out property <int> edit-compression-index: 0;
     in-out property <bool> edit-plugin-tls-term: false;
     in-out property <string> edit-plugin-local-addr: "127.0.0.1:80";
     in-out property <string> edit-plugin-cert-file: "";
@@ -168,11 +166,9 @@ export component TunnelPage inherits Rectangle {
                     edit-basic-auth-user <=> root.edit-basic-auth-user;
                     edit-basic-auth-password <=> root.edit-basic-auth-password;
                     edit-host-header-rewrite <=> root.edit-host-header-rewrite;
-                    edit-route-by-http-user <=> root.edit-route-by-http-user;
                     edit-bandwidth-limit <=> root.edit-bandwidth-limit;
                     edit-bandwidth-side-index <=> root.edit-bandwidth-side-index;
                     edit-proxy-protocol-index <=> root.edit-proxy-protocol-index;
-                    edit-compression-index <=> root.edit-compression-index;
                     edit-plugin-tls-term <=> root.edit-plugin-tls-term;
                     edit-plugin-local-addr <=> root.edit-plugin-local-addr;
                     edit-plugin-cert-file <=> root.edit-plugin-cert-file;

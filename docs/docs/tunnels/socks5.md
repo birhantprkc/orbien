@@ -55,4 +55,3 @@ curl --socks5 YOUR_SERVER_IP:9000 -U admin:123456 http://example.com
 | `transport.bandwidth`            | 否  | `0`      | 带宽上限（Mbps）；`0` 表示不限制       |
 | `transport.bandwidthLimitSide`   | 否  | `client` | 限速端：`client` / `server`    |
 | `transport.proxyProtocolVersion` | 否  |          | PROXY Protocol：`v1` / `v2` |
-| `transport.compression`          | 否  | `none`   | 压缩算法：`none` / `lz4`        |

@@ -1,14 +1,12 @@
 use super::gw::{
-    build_domains, expand_locations, normalize_host, route_basic_auth_ok, route_user_from_headers,
-    HttpGw, HttpRoute,
+    build_domains, expand_locations, normalize_host, route_basic_auth_ok, HttpGw, HttpRoute,
 };
 use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
 use crate::metrics::ServerMetrics;
 use anyhow::{anyhow, bail, Result};
 use httparse::Status;
-use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
-use orbien_core::limit::BandwidthLimiter;
+use orbien_core::limit::{maybe_limit, BandwidthLimiter};
 use orbien_core::msg::NewTunnel;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -30,7 +28,6 @@ impl HttpTunnel {
         gw: Arc<HttpGw>,
         sub_domain_host: &str,
         limiter: Option<Arc<BandwidthLimiter>>,
-        compression: CompressionAlgo,
     ) -> Result<Self> {
         let domains = build_domains(&np.domains, sub_domain_host)?;
         let name = np.tunnel_name.clone();
@@ -38,7 +35,6 @@ impl HttpTunnel {
         let rewrite = np.host_header_rewrite.clone();
         let basic_auth_user = np.basic_auth_user.clone();
         let basic_auth_password = np.basic_auth_password.clone();
-        let route_by_http_user = np.route_by_http_user.clone();
 
         gw.unregister_tunnel(&name).await;
 
@@ -53,9 +49,7 @@ impl HttpTunnel {
                         host_header_rewrite: rewrite.clone(),
                         basic_auth_user: basic_auth_user.clone(),
                         basic_auth_password: basic_auth_password.clone(),
-                        route_by_http_user: route_by_http_user.clone(),
                         limiter: limiter.clone(),
-                        compression,
                     },
                 )
                 .await?;
@@ -66,7 +60,6 @@ impl HttpTunnel {
             tunnel = %name,
             domains = ?domains,
             locations = ?locations,
-            route_by_http_user = %route_by_http_user,
             basic_auth = !basic_auth_user.is_empty() || !basic_auth_password.is_empty(),
             "http tunnel registered"
         );
@@ -145,19 +138,12 @@ async fn handle_http_ingress(
     let mut ingress = prepare_ingress(stream, peer, &access).await?;
     let head = read_http_request_head(&mut ingress.stream).await?;
 
-    let route_user = route_user_from_headers(
-        head.is_proxy_request,
-        head.authorization.as_deref(),
-        head.proxy_authorization.as_deref(),
-    );
-
-    let Some(route) = gw.lookup(&head.host, &head.path, &route_user).await else {
+    let Some(route) = gw.lookup(&head.host, &head.path).await else {
         tracing::debug!(
             peer = %ingress.peer,
             source = %ingress.source,
             host = %head.host,
             path = %head.path,
-            %route_user,
             "http no route"
         );
         write_not_found(&mut ingress.stream).await;
@@ -217,7 +203,7 @@ async fn handle_http_ingress(
         )
         .await?;
 
-    let mut data = wrap_data_conn(data, route.limiter.clone(), route.compression);
+    let mut data = maybe_limit(data, route.limiter.clone());
     let head_len = raw.len() as u64;
     data.write_all(&raw).await?;
     tracing::debug!(

@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod compression;
 pub mod config;
 pub mod io;
 pub mod limit;

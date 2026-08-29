@@ -48,4 +48,3 @@ dig @YOUR_SERVER_IP -p 9000 example.com
 | `transport.bandwidth`            | No       | `0`      | Bandwidth cap (Mbps); `0` means unlimited    |
 | `transport.bandwidthLimitSide`   | No       | `client` | Limit side: `client` / `server`              |
 | `transport.proxyProtocolVersion` | No       |          | PROXY Protocol: `v1` / `v2`                  |
-| `transport.compression`          | No       | `none`   | Compression algorithm: `none` / `lz4`        |

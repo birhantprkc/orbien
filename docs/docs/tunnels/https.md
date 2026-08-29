@@ -122,4 +122,3 @@ X-From = "orbien"
 | `transport.bandwidth`            | 否  | `0`      | 带宽上限（Mbps）；`0` 表示不限制                          |
 | `transport.bandwidthLimitSide`   | 否  | `client` | 限速端：`client` / `server`                       |
 | `transport.proxyProtocolVersion` | 否  |          | PROXY Protocol：`v1` / `v2`（`tls-term` 不可用）    |
-| `transport.compression`          | 否  | `none`   | 压缩算法：`none` / `lz4`                           |

@@ -1,10 +1,9 @@
 use super::udp::run_udp_session;
 use crate::plugin::{self, ConnectionInfo, Plugin, PluginContext};
 use anyhow::{anyhow, Result};
-use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
 use orbien_core::config::{ClientConfig, TunnelConfig};
 use orbien_core::io;
-use orbien_core::limit::{self, BandwidthLimitSide, BandwidthLimiter};
+use orbien_core::limit::{self, maybe_limit, BandwidthLimitSide, BandwidthLimiter};
 use orbien_core::msg::StartDataConn;
 use orbien_core::net::{
     addrs_from_start_data_conn, build_proxy_protocol_header, parse_proxy_protocol_version,
@@ -19,7 +18,6 @@ use tokio::sync::{oneshot, Mutex as AsyncMutex};
 struct TunnelEntry {
     cfg: TunnelConfig,
     limiter: Option<Arc<BandwidthLimiter>>,
-    compression: CompressionAlgo,
     plugin: Option<Arc<dyn Plugin>>,
     proxy_protocol: Option<&'static str>,
     udp_cancel: AsyncMutex<Option<oneshot::Sender<()>>>,
@@ -91,7 +89,7 @@ impl TunnelManager {
         start: &StartDataConn,
         data: DynStream,
     ) -> Result<()> {
-        let data = wrap_data_conn(data, entry.limiter.clone(), entry.compression);
+        let data = maybe_limit(data, entry.limiter.clone());
 
         if let Some(ref plugin) = entry.plugin {
             tracing::debug!(
@@ -194,7 +192,7 @@ impl TunnelManager {
             "udp data conn; starting forwarder"
         );
 
-        let data = wrap_data_conn(data, entry.limiter.clone(), entry.compression);
+        let data = maybe_limit(data, entry.limiter.clone());
 
         run_udp_session(
             data,
@@ -248,15 +246,6 @@ fn build_entry(tunnel: &TunnelConfig) -> Result<Arc<TunnelEntry>> {
         );
     }
 
-    let compression = CompressionAlgo::parse(&tunnel.transport.compression)?;
-    if !compression.is_none() {
-        tracing::info!(
-            tunnel = %tunnel.name,
-            algo = compression.as_str(),
-            "data connection compression enabled"
-        );
-    }
-
     let plugin = if let Some(ref pc) = tunnel.plugin {
         if pc.plugin_type.is_empty() {
             None
@@ -284,7 +273,6 @@ fn build_entry(tunnel: &TunnelConfig) -> Result<Arc<TunnelEntry>> {
     Ok(Arc::new(TunnelEntry {
         cfg: tunnel.clone(),
         limiter,
-        compression,
         plugin,
         proxy_protocol,
         udp_cancel: AsyncMutex::new(None),

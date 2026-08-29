@@ -59,28 +59,6 @@ Requests must include Basic credentials; failure returns `401`:
 curl -u alice:secret http://web.example.com
 ```
 
-## Example: Route by HTTP user
-
-On the same domain, different Basic users can be routed to different local services. If no dedicated route matches,
-traffic falls back to a tunnel without `routeByHTTPUser` (if one exists).
-
-```toml
-[[tunnels]]
-name = "web-alice"
-protocol = "http"
-service = "127.0.0.1:8081"
-domains = ["web.example.com"]
-routeByHTTPUser = "alice"
-basicAuthUser = "alice"
-basicAuthPassword = "secret"
-
-[[tunnels]]
-name = "web-default"
-protocol = "http"
-service = "127.0.0.1:8080"
-domains = ["web.example.com"]
-```
-
 ## Example: Rewrite Host
 
 Rewrite the request `Host` when forwarding to the local service:
@@ -105,9 +83,7 @@ hostHeaderRewrite = "127.0.0.1"
 | `locations`                      | No       |          | Path prefix, e.g. `/api`; empty means all paths                                                      |
 | `basicAuthUser`                  | No       |          | HTTP Basic username; if both this and `basicAuthPassword` are empty, auth is disabled                |
 | `basicAuthPassword`              | No       |          | HTTP Basic password                                                                                  |
-| `routeByHTTPUser`                | No       |          | Select a route by the request Basic username; empty matches any user (exact user takes priority)     |
 | `hostHeaderRewrite`              | No       |          | Rewrite Host when forwarding to the local service; empty means no rewrite                            |
 | `transport.bandwidth`            | No       | `0`      | Bandwidth cap (Mbps); `0` means unlimited                                                            |
 | `transport.bandwidthLimitSide`   | No       | `client` | Limit side: `client` / `server`                                                                      |
 | `transport.proxyProtocolVersion` | No       |          | PROXY Protocol: `v1` / `v2`                                                                          |
-| `transport.compression`          | No       | `none`   | Compression algorithm: `none` / `lz4`                                                                |

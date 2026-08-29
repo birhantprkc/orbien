@@ -73,17 +73,12 @@ pub struct NewTunnel {
     pub headers: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub response_headers: std::collections::HashMap<String, String>,
-    #[serde(default)]
-    pub route_by_http_user: String,
 
     #[serde(default)]
     pub bandwidth: f64,
 
     #[serde(default)]
     pub bandwidth_limit_side: String,
-
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub compression: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

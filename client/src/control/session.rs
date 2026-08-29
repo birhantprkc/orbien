@@ -688,7 +688,6 @@ fn build_new_tunnel_message(p: &TunnelConfig) -> Result<Message> {
                 np.basic_auth_user = p.basic_auth_user.clone();
                 np.basic_auth_password = p.basic_auth_password.clone();
                 np.host_header_rewrite = p.host_header_rewrite.clone();
-                np.route_by_http_user = p.route_by_http_user.clone();
             },
         )),
         "https" => Message::NewTunnel(new_tunnel_base(
@@ -735,12 +734,8 @@ fn new_tunnel_base(
         host_header_rewrite: String::new(),
         headers: Default::default(),
         response_headers: Default::default(),
-        route_by_http_user: String::new(),
         bandwidth: transport.bandwidth,
         bandwidth_limit_side: omit_client_side(&transport.bandwidth_limit_side),
-        compression: orbien_core::compression::CompressionAlgo::parse(&transport.compression)
-            .unwrap_or_default()
-            .wire_str(),
     };
     extra(&mut np);
     np

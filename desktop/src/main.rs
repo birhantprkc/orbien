@@ -94,11 +94,9 @@ fn row_to_tunnel(row: &TunnelRow) -> anyhow::Result<orbien_core::config::TunnelC
         row.basic_auth_user.as_str(),
         row.basic_auth_password.as_str(),
         row.host_header_rewrite.as_str(),
-        row.route_by_http_user.as_str(),
         row.bandwidth_limit.as_str(),
         row.bandwidth_limit_side.as_str(),
         row.proxy_protocol_version.as_str(),
-        row.compression.as_str(),
         row.plugin_tls_term,
         row.plugin_local_addr.as_str(),
         row.plugin_cert_file.as_str(),
@@ -124,11 +122,9 @@ fn tunnel_to_row(p: &orbien_core::config::TunnelConfig) -> TunnelRow {
         basic_auth_user: parts.basic_auth_user.into(),
         basic_auth_password: parts.basic_auth_password.into(),
         host_header_rewrite: parts.host_header_rewrite.into(),
-        route_by_http_user: parts.route_by_http_user.into(),
         bandwidth_limit: parts.bandwidth.into(),
         bandwidth_limit_side: parts.bandwidth_limit_side.into(),
         proxy_protocol_version: parts.proxy_protocol_version.into(),
-        compression: parts.compression.into(),
         plugin_tls_term: parts.plugin_tls_term,
         plugin_local_addr: parts.plugin_local_addr.into(),
         plugin_cert_file: parts.plugin_cert_file.into(),
@@ -345,22 +341,6 @@ fn proxy_protocol_name(index: i32) -> &'static str {
     }
 }
 
-fn compression_index(algo: &str) -> i32 {
-    if algo.trim().eq_ignore_ascii_case("lz4") {
-        1
-    } else {
-        0
-    }
-}
-
-fn compression_name(index: i32) -> &'static str {
-    if index == 1 {
-        "lz4"
-    } else {
-        "none"
-    }
-}
-
 fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_name("".into());
     ui.set_tunnel_edit_local_ip("127.0.0.1".into());
@@ -371,11 +351,9 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_basic_auth_user("".into());
     ui.set_tunnel_edit_basic_auth_password("".into());
     ui.set_tunnel_edit_host_header_rewrite("".into());
-    ui.set_tunnel_edit_route_by_http_user("".into());
     ui.set_tunnel_edit_bandwidth_limit("".into());
     ui.set_tunnel_edit_bandwidth_side_index(0);
     ui.set_tunnel_edit_proxy_protocol_index(0);
-    ui.set_tunnel_edit_compression_index(0);
     ui.set_tunnel_edit_plugin_tls_term(false);
     ui.set_tunnel_edit_plugin_local_addr("127.0.0.1:80".into());
     ui.set_tunnel_edit_plugin_cert_file("".into());
@@ -399,7 +377,6 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_basic_auth_user(row.basic_auth_user.clone());
     ui.set_tunnel_edit_basic_auth_password(row.basic_auth_password.clone());
     ui.set_tunnel_edit_host_header_rewrite(row.host_header_rewrite.clone());
-    ui.set_tunnel_edit_route_by_http_user(row.route_by_http_user.clone());
     ui.set_tunnel_edit_bandwidth_limit(row.bandwidth_limit.clone());
     ui.set_tunnel_edit_bandwidth_side_index(bandwidth_side_index(
         row.bandwidth_limit_side.as_str(),
@@ -407,7 +384,6 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_proxy_protocol_index(proxy_protocol_index(
         row.proxy_protocol_version.as_str(),
     ));
-    ui.set_tunnel_edit_compression_index(compression_index(row.compression.as_str()));
     ui.set_tunnel_edit_plugin_tls_term(row.plugin_tls_term);
     ui.set_tunnel_edit_plugin_local_addr(row.plugin_local_addr.clone());
     ui.set_tunnel_edit_plugin_cert_file(row.plugin_cert_file.clone());
@@ -469,11 +445,6 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         } else {
             "".into()
         },
-        route_by_http_user: if is_http {
-            ui.get_tunnel_edit_route_by_http_user()
-        } else {
-            "".into()
-        },
         bandwidth_limit: ui.get_tunnel_edit_bandwidth_limit(),
         bandwidth_limit_side: bandwidth_side_name(ui.get_tunnel_edit_bandwidth_side_index()).into(),
         proxy_protocol_version: if plugin {
@@ -481,7 +452,6 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         } else {
             proxy_protocol_name(ui.get_tunnel_edit_proxy_protocol_index()).into()
         },
-        compression: compression_name(ui.get_tunnel_edit_compression_index()).into(),
         plugin_tls_term: plugin,
         plugin_local_addr: if plugin {
             ui.get_tunnel_edit_plugin_local_addr()

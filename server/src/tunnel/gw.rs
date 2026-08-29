@@ -11,12 +11,10 @@ pub struct HttpRoute {
     pub host_header_rewrite: String,
     pub basic_auth_user: String,
     pub basic_auth_password: String,
-    pub route_by_http_user: String,
     pub limiter: Option<std::sync::Arc<orbien_core::limit::BandwidthLimiter>>,
-    pub compression: orbien_core::compression::CompressionAlgo,
 }
 
-type DomainIndex = HashMap<String, HashMap<String, Vec<HttpRoute>>>;
+type DomainIndex = HashMap<String, Vec<HttpRoute>>;
 
 pub struct HttpGw {
     routes: Mutex<DomainIndex>,
@@ -37,15 +35,13 @@ impl HttpGw {
             return Err(anyhow::anyhow!("empty http domain"));
         }
         let mut map = self.routes.lock().await;
-        let by_user = map.entry(key.clone()).or_default();
-        let list = by_user.entry(route.route_by_http_user.clone()).or_default();
+        let list = map.entry(key.clone()).or_default();
 
         if let Some(existing) = list.iter().find(|r| r.location == route.location) {
             if existing.tunnel_name != route.tunnel_name {
                 return Err(anyhow::anyhow!(
-                    "router config conflict: domain={key} location={} routeByHTTPUser={}",
-                    route.location,
-                    route.route_by_http_user
+                    "router config conflict: domain={key} location={}",
+                    route.location
                 ));
             }
             list.retain(|r| r.location != route.location);
@@ -59,44 +55,21 @@ impl HttpGw {
 
     pub async fn unregister_tunnel(&self, tunnel_name: &str) {
         let mut map = self.routes.lock().await;
-        map.retain(|_, by_user| {
-            by_user.retain(|_, list| {
-                list.retain(|r| r.tunnel_name != tunnel_name);
-                !list.is_empty()
-            });
-            !by_user.is_empty()
+        map.retain(|_, list| {
+            list.retain(|r| r.tunnel_name != tunnel_name);
+            !list.is_empty()
         });
     }
 
-    pub async fn lookup(&self, host: &str, path: &str, route_user: &str) -> Option<HttpRoute> {
+    pub async fn lookup(&self, host: &str, path: &str) -> Option<HttpRoute> {
         let key = normalize_host(host);
         let map = self.routes.lock().await;
-        lookup_exact_or_all_users(&map, &key, path, route_user).cloned()
+        match_location(&map, &key, path).cloned()
     }
 }
 
-fn lookup_exact_or_all_users<'a>(
-    map: &'a DomainIndex,
-    host: &str,
-    path: &str,
-    route_user: &str,
-) -> Option<&'a HttpRoute> {
-    if let Some(r) = match_location(map, host, path, route_user) {
-        return Some(r);
-    }
-    if !route_user.is_empty() {
-        return match_location(map, host, path, "");
-    }
-    None
-}
-
-fn match_location<'a>(
-    map: &'a DomainIndex,
-    host: &str,
-    path: &str,
-    route_user: &str,
-) -> Option<&'a HttpRoute> {
-    let list = map.get(host)?.get(route_user)?;
+fn match_location<'a>(map: &'a DomainIndex, host: &str, path: &str) -> Option<&'a HttpRoute> {
+    let list = map.get(host)?;
     for route in list {
         if path.starts_with(&route.location) {
             return Some(route);
@@ -212,28 +185,6 @@ pub fn parse_basic_auth(header_value: &str) -> Option<(String, String)> {
     let text = String::from_utf8(decoded).ok()?;
     let (user, pass) = text.split_once(':')?;
     Some((user.to_string(), pass.to_string()))
-}
-
-pub fn route_user_from_headers(
-    is_proxy_request: bool,
-    authorization: Option<&str>,
-    proxy_authorization: Option<&str>,
-) -> String {
-    if is_proxy_request {
-        if let Some(proxy_auth) = proxy_authorization {
-            return parse_basic_auth(proxy_auth)
-                .map(|(u, _)| u)
-                .unwrap_or_default();
-        }
-        return authorization
-            .and_then(parse_basic_auth)
-            .map(|(u, _)| u)
-            .unwrap_or_default();
-    }
-    authorization
-        .and_then(parse_basic_auth)
-        .map(|(u, _)| u)
-        .unwrap_or_default()
 }
 
 pub fn route_basic_auth_ok(
