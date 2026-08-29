@@ -320,6 +320,7 @@ pub fn tunnel_from_parts(
     bandwidth: &str,
     bandwidth_limit_side: &str,
     proxy_protocol_version: &str,
+    compression: &str,
     plugin_tls_term: bool,
     plugin_local_addr: &str,
     plugin_cert_file: &str,
@@ -382,6 +383,11 @@ pub fn tunnel_from_parts(
                 "client".into()
             },
             proxy_protocol_version: proxy_protocol_version.trim().into(),
+            compression: if compression.trim().eq_ignore_ascii_case("lz4") {
+                "lz4".into()
+            } else {
+                "none".into()
+            },
         },
         plugin,
     })
@@ -429,6 +435,7 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         bandwidth: bandwidth_display(p.transport.bandwidth),
         bandwidth_limit_side: p.transport.bandwidth_limit_side.clone(),
         proxy_protocol_version: p.transport.proxy_protocol_version.clone(),
+        compression: p.transport.compression.clone(),
         plugin_tls_term: tls_term.is_some(),
         plugin_local_addr: tls_term
             .map(|pl| pl.service.clone())
@@ -459,6 +466,7 @@ pub struct TunnelParts {
     pub bandwidth: String,
     pub bandwidth_limit_side: String,
     pub proxy_protocol_version: String,
+    pub compression: String,
     pub plugin_tls_term: bool,
     pub plugin_local_addr: String,
     pub plugin_cert_file: String,

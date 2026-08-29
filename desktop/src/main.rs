@@ -98,6 +98,7 @@ fn row_to_tunnel(row: &TunnelRow) -> anyhow::Result<orbien_core::config::TunnelC
         row.bandwidth_limit.as_str(),
         row.bandwidth_limit_side.as_str(),
         row.proxy_protocol_version.as_str(),
+        row.compression.as_str(),
         row.plugin_tls_term,
         row.plugin_local_addr.as_str(),
         row.plugin_cert_file.as_str(),
@@ -126,6 +127,7 @@ fn tunnel_to_row(p: &orbien_core::config::TunnelConfig) -> TunnelRow {
         bandwidth_limit: parts.bandwidth.into(),
         bandwidth_limit_side: parts.bandwidth_limit_side.into(),
         proxy_protocol_version: parts.proxy_protocol_version.into(),
+        compression: parts.compression.into(),
         plugin_tls_term: parts.plugin_tls_term,
         plugin_local_addr: parts.plugin_local_addr.into(),
         plugin_cert_file: parts.plugin_cert_file.into(),
@@ -341,6 +343,22 @@ fn proxy_protocol_name(index: i32) -> &'static str {
     }
 }
 
+fn compression_index(algo: &str) -> i32 {
+    if algo.trim().eq_ignore_ascii_case("lz4") {
+        1
+    } else {
+        0
+    }
+}
+
+fn compression_name(index: i32) -> &'static str {
+    if index == 1 {
+        "lz4"
+    } else {
+        "none"
+    }
+}
+
 fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_name("".into());
     ui.set_tunnel_edit_local_ip("127.0.0.1".into());
@@ -355,6 +373,7 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_bandwidth_limit("".into());
     ui.set_tunnel_edit_bandwidth_side_index(0);
     ui.set_tunnel_edit_proxy_protocol_index(0);
+    ui.set_tunnel_edit_compression_index(0);
     ui.set_tunnel_edit_plugin_tls_term(false);
     ui.set_tunnel_edit_plugin_local_addr("127.0.0.1:80".into());
     ui.set_tunnel_edit_plugin_cert_file("".into());
@@ -385,6 +404,7 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_proxy_protocol_index(proxy_protocol_index(
         row.proxy_protocol_version.as_str(),
     ));
+    ui.set_tunnel_edit_compression_index(compression_index(row.compression.as_str()));
     ui.set_tunnel_edit_plugin_tls_term(row.plugin_tls_term);
     ui.set_tunnel_edit_plugin_local_addr(row.plugin_local_addr.clone());
     ui.set_tunnel_edit_plugin_cert_file(row.plugin_cert_file.clone());
@@ -457,6 +477,7 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         } else {
             proxy_protocol_name(ui.get_tunnel_edit_proxy_protocol_index()).into()
         },
+        compression: compression_name(ui.get_tunnel_edit_compression_index()).into(),
         plugin_tls_term: plugin,
         plugin_local_addr: if plugin {
             ui.get_tunnel_edit_plugin_local_addr()
