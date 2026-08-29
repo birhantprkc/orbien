@@ -38,12 +38,13 @@ ssh -p 9000 user@YOUR_SERVER_IP
 
 ## Parameters
 
-| Parameter                        | Required | Default     | Description                                      |
-|----------------------------------|----------|-------------|--------------------------------------------------|
-| `name`                           | Yes      |             | Tunnel name; must be unique                      |
-| `protocol`                       | Yes      |             | Always `tcp`                                     |
-| `service`                        | Yes      |             | Local service address, e.g. `127.0.0.1:22`       |
-| `remotePort`                     | Yes      |             | Public listen port on the server                 |
-| `transport.bandwidth`            | No       | `0`         | Bandwidth cap (Mbps); `0` means unlimited        |
-| `transport.bandwidthLimitSide`   | No       | `client`    | Limit side: `client` / `server`                  |
-| `transport.proxyProtocolVersion` | No       |             | PROXY Protocol: `v1` / `v2`                      |
+| Parameter                        | Required | Default  | Description                                |
+|----------------------------------|----------|----------|--------------------------------------------|
+| `name`                           | Yes      |          | Tunnel name; must be unique                |
+| `protocol`                       | Yes      |          | Always `tcp`                               |
+| `service`                        | Yes      |          | Local service address, e.g. `127.0.0.1:22` |
+| `remotePort`                     | Yes      |          | Public listen port on the server           |
+| `transport.bandwidth`            | No       | `0`      | Bandwidth cap (Mbps); `0` means unlimited  |
+| `transport.bandwidthLimitSide`   | No       | `client` | Limit side: `client` / `server`            |
+| `transport.proxyProtocolVersion` | No       |          | PROXY Protocol: `v1` / `v2`                |
+| `transport.compression`          | No       | `none`   | Compression algorithm: `none` / `lz4`      |

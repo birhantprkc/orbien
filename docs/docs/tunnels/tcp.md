@@ -38,12 +38,13 @@ ssh -p 9000 user@YOUR_SERVER_IP
 
 ## 参数
 
-| 参数                               | 必填 | 默认值         | 说明                          |
-|----------------------------------|----|-------------|-----------------------------|
-| `name`                           | 是  |             | 隧道名称，唯一                     |
-| `protocol`                       | 是  |             | 固定为 `tcp`                   |
-| `service`                        | 是  |             | 本地服务地址，如 `127.0.0.1:22`    |
-| `remotePort`                     | 是  |             | 服务端对外监听端口                   |
-| `transport.bandwidth`            | 否  | `0`         | 带宽上限（Mbps）；`0` 表示不限制       |
-| `transport.bandwidthLimitSide`   | 否  | `client`    | 限速端：`client` / `server`     |
-| `transport.proxyProtocolVersion` | 否  |             | PROXY Protocol：`v1` / `v2`  |
+| 参数                               | 必填 | 默认值      | 说明                         |
+|----------------------------------|----|----------|----------------------------|
+| `name`                           | 是  |          | 隧道名称，唯一                    |
+| `protocol`                       | 是  |          | 固定为 `tcp`                  |
+| `service`                        | 是  |          | 本地服务地址，如 `127.0.0.1:22`    |
+| `remotePort`                     | 是  |          | 服务端对外监听端口                  |
+| `transport.bandwidth`            | 否  | `0`      | 带宽上限（Mbps）；`0` 表示不限制       |
+| `transport.bandwidthLimitSide`   | 否  | `client` | 限速端：`client` / `server`    |
+| `transport.proxyProtocolVersion` | 否  |          | PROXY Protocol：`v1` / `v2` |
+| `transport.compression`          | 否  | `none`   | 压缩算法：`none` / `lz4`        |

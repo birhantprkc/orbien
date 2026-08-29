@@ -64,7 +64,8 @@ certFile = "/path/to/cert.pem"
 keyFile = "/path/to/key.pem"
 ```
 
-`certFile` / `keyFile` 可省略，省略时使用临时自签证书（浏览器会提示不受信任）。启用插件后使用 `plugin.service` 指向本地 HTTP，不再使用隧道级 `service`，且不可配置 PROXY Protocol。
+`certFile` / `keyFile` 可省略，省略时使用临时自签证书（浏览器会提示不受信任）。启用插件后使用 `plugin.service` 指向本地
+HTTP，不再使用隧道级 `service`，且不可配置 PROXY Protocol。
 
 ## 示例：TLS 终止时改写 Host
 
@@ -106,18 +107,19 @@ X-From = "orbien"
 
 ## 参数
 
-| 参数                               | 必填 | 默认值         | 说明                                                    |
-|----------------------------------|----|-------------|-------------------------------------------------------|
-| `name`                           | 是  |             | 隧道名称，唯一                                               |
-| `protocol`                       | 是  |             | 固定为 `https`                                           |
-| `service`                        | 条件 |             | 本地服务地址（透传必填），如 `127.0.0.1:443`                       |
-| `domains`                        | 是  |             | 域名列表，至少一个；完整域名或无 `.` 的前缀（前缀需服务端 `rootDomain`） |
-| `plugin.type`                    | 否  |             | `tls-term`：客户端终止 TLS                                |
-| `plugin.service`                 | 条件 |             | `tls-term` 时必填，如 `127.0.0.1:80`                       |
-| `plugin.certFile`                 | 否  |             | 证书路径；空则临时自签                                           |
-| `plugin.keyFile`                 | 否  |             | 私钥路径；空则临时自签                                           |
-| `plugin.hostHeaderRewrite`       | 否  |             | 改写转发到本地服务的 Host；空表示不改                                 |
-| `plugin.requestHeaders.set`      | 否  |             | 向后端追加请求头，键值对                                          |
-| `transport.bandwidth`            | 否  | `0`         | 带宽上限（Mbps）；`0` 表示不限制                                 |
-| `transport.bandwidthLimitSide`   | 否  | `client`    | 限速端：`client` / `server`                               |
-| `transport.proxyProtocolVersion` | 否  |             | PROXY Protocol：`v1` / `v2`（`tls-term` 不可用）            |
+| 参数                               | 必填 | 默认值      | 说明                                            |
+|----------------------------------|----|----------|-----------------------------------------------|
+| `name`                           | 是  |          | 隧道名称，唯一                                       |
+| `protocol`                       | 是  |          | 固定为 `https`                                   |
+| `service`                        | 条件 |          | 本地服务地址（透传必填），如 `127.0.0.1:443`                |
+| `domains`                        | 是  |          | 域名列表，至少一个；完整域名或无 `.` 的前缀（前缀需服务端 `rootDomain`） |
+| `plugin.type`                    | 否  |          | `tls-term`：客户端终止 TLS                          |
+| `plugin.service`                 | 条件 |          | `tls-term` 时必填，如 `127.0.0.1:80`               |
+| `plugin.certFile`                | 否  |          | 证书路径；空则临时自签                                   |
+| `plugin.keyFile`                 | 否  |          | 私钥路径；空则临时自签                                   |
+| `plugin.hostHeaderRewrite`       | 否  |          | 改写转发到本地服务的 Host；空表示不改                         |
+| `plugin.requestHeaders.set`      | 否  |          | 向后端追加请求头，键值对                                  |
+| `transport.bandwidth`            | 否  | `0`      | 带宽上限（Mbps）；`0` 表示不限制                          |
+| `transport.bandwidthLimitSide`   | 否  | `client` | 限速端：`client` / `server`                       |
+| `transport.proxyProtocolVersion` | 否  |          | PROXY Protocol：`v1` / `v2`（`tls-term` 不可用）    |
+| `transport.compression`          | 否  | `none`   | 压缩算法：`none` / `lz4`                           |
