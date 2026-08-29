@@ -104,6 +104,7 @@ fn row_to_tunnel(row: &TunnelRow) -> anyhow::Result<orbien_core::config::TunnelC
         row.plugin_cert_file.as_str(),
         row.plugin_key_file.as_str(),
         row.plugin_host_rewrite.as_str(),
+        row.plugin_request_headers.as_str(),
         row.plugin_username.as_str(),
         row.plugin_password.as_str(),
     )
@@ -133,6 +134,7 @@ fn tunnel_to_row(p: &orbien_core::config::TunnelConfig) -> TunnelRow {
         plugin_cert_file: parts.plugin_cert_file.into(),
         plugin_key_file: parts.plugin_key_file.into(),
         plugin_host_rewrite: parts.plugin_host_rewrite.into(),
+        plugin_request_headers: parts.plugin_request_headers.into(),
         plugin_username: parts.plugin_username.into(),
         plugin_password: parts.plugin_password.into(),
     }
@@ -379,6 +381,7 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_plugin_cert_file("".into());
     ui.set_tunnel_edit_plugin_key_file("".into());
     ui.set_tunnel_edit_plugin_host_rewrite("".into());
+    ui.set_tunnel_edit_plugin_request_headers("".into());
     ui.set_tunnel_edit_plugin_username("".into());
     ui.set_tunnel_edit_plugin_password("".into());
     ui.set_tunnel_edit_type_index(0);
@@ -410,6 +413,7 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_plugin_cert_file(row.plugin_cert_file.clone());
     ui.set_tunnel_edit_plugin_key_file(row.plugin_key_file.clone());
     ui.set_tunnel_edit_plugin_host_rewrite(row.plugin_host_rewrite.clone());
+    ui.set_tunnel_edit_plugin_request_headers(row.plugin_request_headers.clone());
     ui.set_tunnel_edit_plugin_username(row.plugin_username.clone());
     ui.set_tunnel_edit_plugin_password(row.plugin_password.clone());
     ui.set_tunnel_show_advanced(false);
@@ -496,6 +500,11 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         },
         plugin_host_rewrite: if plugin {
             ui.get_tunnel_edit_plugin_host_rewrite()
+        } else {
+            "".into()
+        },
+        plugin_request_headers: if plugin {
+            ui.get_tunnel_edit_plugin_request_headers()
         } else {
             "".into()
         },
