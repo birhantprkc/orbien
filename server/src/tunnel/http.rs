@@ -7,7 +7,8 @@ use crate::control::Control;
 use crate::metrics::ServerMetrics;
 use anyhow::{anyhow, bail, Result};
 use httparse::Status;
-use orbien_core::limit::{maybe_limit, BandwidthLimiter};
+use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
+use orbien_core::limit::BandwidthLimiter;
 use orbien_core::msg::NewTunnel;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -29,6 +30,7 @@ impl HttpTunnel {
         gw: Arc<HttpGw>,
         sub_domain_host: &str,
         limiter: Option<Arc<BandwidthLimiter>>,
+        compression: CompressionAlgo,
     ) -> Result<Self> {
         let domains = build_domains(&np.domains, sub_domain_host)?;
         let name = np.tunnel_name.clone();
@@ -53,6 +55,7 @@ impl HttpTunnel {
                         basic_auth_password: basic_auth_password.clone(),
                         route_by_http_user: route_by_http_user.clone(),
                         limiter: limiter.clone(),
+                        compression,
                     },
                 )
                 .await?;
@@ -214,7 +217,7 @@ async fn handle_http_ingress(
         )
         .await?;
 
-    let mut data = maybe_limit(data, route.limiter.clone());
+    let mut data = wrap_data_conn(data, route.limiter.clone(), route.compression);
     let head_len = raw.len() as u64;
     data.write_all(&raw).await?;
     tracing::debug!(

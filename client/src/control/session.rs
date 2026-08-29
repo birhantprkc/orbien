@@ -738,6 +738,9 @@ fn new_tunnel_base(
         route_by_http_user: String::new(),
         bandwidth: transport.bandwidth,
         bandwidth_limit_side: omit_client_side(&transport.bandwidth_limit_side),
+        compression: orbien_core::compression::CompressionAlgo::parse(&transport.compression)
+            .unwrap_or_default()
+            .wire_str(),
     };
     extra(&mut np);
     np

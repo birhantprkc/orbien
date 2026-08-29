@@ -2,7 +2,8 @@ use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
 use crate::metrics;
 use anyhow::Result;
-use orbien_core::limit::{maybe_limit, BandwidthLimiter};
+use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
+use orbien_core::limit::BandwidthLimiter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -24,6 +25,7 @@ impl TcpTunnel {
         remote_port: u16,
         control: Arc<Control>,
         limiter: Option<Arc<BandwidthLimiter>>,
+        compression: CompressionAlgo,
         access: Arc<AccessPolicy>,
     ) -> Result<Self> {
         let addr = format!("{bind_addr}:{remote_port}");
@@ -63,6 +65,7 @@ impl TcpTunnel {
                                         stream,
                                         peer,
                                         lim,
+                                        compression,
                                         access,
                                     )
                                     .await
@@ -117,6 +120,7 @@ async fn handle_ingress(
     stream: tokio::net::TcpStream,
     peer: std::net::SocketAddr,
     limiter: Option<Arc<BandwidthLimiter>>,
+    compression: CompressionAlgo,
     access: Arc<AccessPolicy>,
 ) -> Result<()> {
     let ingress = prepare_ingress(stream, peer, &access).await?;
@@ -135,7 +139,7 @@ async fn handle_ingress(
         )
         .await?;
 
-    let data = maybe_limit(data, limiter);
+    let data = wrap_data_conn(data, limiter, compression);
 
     tracing::debug!(
         tunnel = %tunnel_name,

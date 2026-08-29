@@ -1,7 +1,8 @@
 use crate::control::Control;
 use crate::metrics::{MemMetrics, ServerMetrics};
 use anyhow::Result;
-use orbien_core::limit::{maybe_limit, BandwidthLimiter};
+use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
+use orbien_core::limit::BandwidthLimiter;
 use orbien_core::msg::{self, Message, UdpPacket};
 use orbien_core::udp::{forward_user_conn, CHANNEL_CAP, SERVER_DATA_READ_DEADLINE};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,6 +31,7 @@ impl UdpTunnel {
         remote_port: u16,
         control: Arc<Control>,
         limiter: Option<Arc<BandwidthLimiter>>,
+        compression: CompressionAlgo,
         packet_size: usize,
     ) -> Result<Self> {
         let addr = format!("{bind_addr}:{remote_port}");
@@ -66,6 +68,7 @@ impl UdpTunnel {
                     tunnel_name,
                     control,
                     limiter,
+                    compression,
                     send_rx,
                     read_tx,
                     closed_flag,
@@ -116,6 +119,7 @@ async fn data_conn_loop(
     tunnel_name: String,
     control: std::sync::Weak<Control>,
     limiter: Option<Arc<BandwidthLimiter>>,
+    compression: CompressionAlgo,
     mut send_rx: mpsc::Receiver<UdpPacket>,
     read_tx: mpsc::Sender<UdpPacket>,
     closed: Arc<AtomicBool>,
@@ -156,7 +160,7 @@ async fn data_conn_loop(
             }
         };
 
-        let data = maybe_limit(data, limiter.clone());
+        let data = wrap_data_conn(data, limiter.clone(), compression);
         let (reader, mut writer) = tokio::io::split(data);
         tracing::info!(
             tunnel = %tunnel_name,

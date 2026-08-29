@@ -13,6 +13,7 @@ pub struct HttpRoute {
     pub basic_auth_password: String,
     pub route_by_http_user: String,
     pub limiter: Option<std::sync::Arc<orbien_core::limit::BandwidthLimiter>>,
+    pub compression: orbien_core::compression::CompressionAlgo,
 }
 
 type DomainIndex = HashMap<String, HashMap<String, Vec<HttpRoute>>>;

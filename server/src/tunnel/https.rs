@@ -3,7 +3,8 @@ use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
 use crate::metrics;
 use anyhow::{anyhow, Result};
-use orbien_core::limit::{maybe_limit, BandwidthLimiter};
+use orbien_core::compression::{wrap_data_conn, CompressionAlgo};
+use orbien_core::limit::BandwidthLimiter;
 use orbien_core::msg::NewTunnel;
 use orbien_core::tls::{peek_client_hello_sni, PrefixedStream};
 use std::collections::HashMap;
@@ -17,6 +18,7 @@ pub struct HttpsRoute {
     pub tunnel_name: String,
     pub control: Weak<Control>,
     pub limiter: Option<Arc<BandwidthLimiter>>,
+    pub compression: CompressionAlgo,
 }
 
 pub struct HttpsGw {
@@ -74,6 +76,7 @@ impl HttpsTunnel {
         gw: Arc<HttpsGw>,
         sub_domain_host: &str,
         limiter: Option<Arc<BandwidthLimiter>>,
+        compression: CompressionAlgo,
     ) -> Result<Self> {
         let domains = build_domains(&np.domains, sub_domain_host)?;
         let name = np.tunnel_name.clone();
@@ -87,6 +90,7 @@ impl HttpsTunnel {
                     tunnel_name: name.clone(),
                     control: Arc::downgrade(&control),
                     limiter: limiter.clone(),
+                    compression,
                 },
             )
             .await?;
@@ -192,7 +196,7 @@ async fn handle_https_ingress(
         )
         .await?;
 
-    let data = maybe_limit(data, route.limiter.clone());
+    let data = wrap_data_conn(data, route.limiter.clone(), route.compression);
     let user = PrefixedStream::new(prefix, ingress.stream);
 
     tracing::debug!(

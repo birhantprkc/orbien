@@ -32,3 +32,5 @@ futures-util = { workspace = true }
 kcp-tokio = { workspace = true }
 yamux = { workspace = true }
 tls-parser = { workspace = true }
+lz4_flex = { workspace = true }
+pin-project-lite = { workspace = true }

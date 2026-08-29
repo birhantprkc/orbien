@@ -4,6 +4,8 @@ use crate::tunnel::{
     format_local_addr, HttpTunnel, HttpsTunnel, RegisteredTunnel, TcpTunnel, UdpTunnel,
 };
 use anyhow::{anyhow, Result};
+use orbien_core::compression::CompressionAlgo;
+use orbien_core::limit::BandwidthLimiter;
 use orbien_core::msg::{self, CloseTunnel, Message, NewTunnel, NewTunnelResp};
 use std::sync::Arc;
 
@@ -11,6 +13,33 @@ impl Control {
     fn note_tunnel_registered(&self, name: &str, tunnel_type: &str) {
         self.metrics
             .new_tunnel(name, tunnel_type, &self.user, &self.session_id);
+    }
+
+    fn tunnel_transport(
+        np: &NewTunnel,
+    ) -> Result<(Option<Arc<BandwidthLimiter>>, CompressionAlgo)> {
+        let limiter = orbien_core::limit::limiter_if_side(
+            np.bandwidth,
+            &np.bandwidth_limit_side,
+            orbien_core::limit::BandwidthLimitSide::Server,
+        )?;
+        if let Some(ref l) = limiter {
+            tracing::info!(
+                tunnel = %np.tunnel_name,
+                bytes_per_sec = l.bytes_per_sec(),
+                mode = "server",
+                "bandwidth limit enabled"
+            );
+        }
+        let compression = CompressionAlgo::parse(&np.compression)?;
+        if !compression.is_none() {
+            tracing::info!(
+                tunnel = %np.tunnel_name,
+                algo = compression.as_str(),
+                "data connection compression enabled"
+            );
+        }
+        Ok((limiter, compression))
     }
 
     pub(super) async fn handle_new_tunnel(self: &Arc<Self>, np: NewTunnel) -> Result<()> {
@@ -47,19 +76,7 @@ impl Control {
             return Err(anyhow!("invalid remote_port"));
         }
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let (limiter, compression) = Self::tunnel_transport(np)?;
 
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;
@@ -79,6 +96,7 @@ impl Control {
             remote_port,
             control,
             limiter,
+            compression,
             Arc::clone(&self.access),
         )
         .await?;
@@ -100,19 +118,7 @@ impl Control {
             .clone()
             .ok_or_else(|| anyhow!("http tunnel requires server httpGwPort > 0"))?;
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let (limiter, compression) = Self::tunnel_transport(np)?;
 
         let name = np.tunnel_name.clone();
         {
@@ -128,6 +134,7 @@ impl Control {
             Arc::clone(&gw),
             &self.cfg.root_domain,
             limiter,
+            compression,
         )
         .await?;
 
@@ -153,19 +160,7 @@ impl Control {
             .clone()
             .ok_or_else(|| anyhow!("https tunnel requires server httpsGwPort > 0"))?;
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let (limiter, compression) = Self::tunnel_transport(np)?;
 
         let name = np.tunnel_name.clone();
         {
@@ -181,6 +176,7 @@ impl Control {
             Arc::clone(&gw),
             &self.cfg.root_domain,
             limiter,
+            compression,
         )
         .await?;
 
@@ -205,19 +201,7 @@ impl Control {
             return Err(anyhow!("invalid remote_port"));
         }
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let (limiter, compression) = Self::tunnel_transport(np)?;
 
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;
@@ -238,6 +222,7 @@ impl Control {
             remote_port,
             control,
             limiter,
+            compression,
             packet_size,
         )
         .await?;

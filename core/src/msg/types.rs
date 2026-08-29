@@ -81,6 +81,9 @@ pub struct NewTunnel {
 
     #[serde(default)]
     pub bandwidth_limit_side: String,
+
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compression: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

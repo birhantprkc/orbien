@@ -36,6 +36,7 @@ remotePort = 9000
 bandwidth = 10
 bandwidthLimitSide = "client"
 proxyProtocolVersion = "v2"
+compression = "lz4"
 
 [[tunnels]]
 name = "dns"
@@ -47,6 +48,7 @@ remotePort = 5353
 bandwidth = 10
 bandwidthLimitSide = "server"
 proxyProtocolVersion = "v1"
+compression = "none"
 
 [[tunnels]]
 name = "web"

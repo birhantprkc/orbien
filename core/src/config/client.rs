@@ -205,10 +205,17 @@ pub struct TunnelTransportConfig {
         alias = "proxy_protocol_version"
     )]
     pub proxy_protocol_version: String,
+
+    #[serde(default = "default_compression")]
+    pub compression: String,
 }
 
 fn default_bandwidth_limit_side() -> String {
     "client".into()
+}
+
+fn default_compression() -> String {
+    "none".into()
 }
 
 fn default_auth_type() -> String {
@@ -432,6 +439,8 @@ impl ClientConfig {
                     t.transport.bandwidth_limit_side
                 ));
             }
+            crate::compression::CompressionAlgo::parse(&t.transport.compression)
+                .map_err(|e| anyhow!("tunnel `{}` {e}", t.name))?;
             match proto.as_str() {
                 "tcp" | "udp" => {
                     if t.remote_port == 0 {
