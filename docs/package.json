@@ -1,6 +1,6 @@
 {
   "name": "orbien-docs",
-  "version": "3.3.0-beta.1",
+  "version": "3.4.0-dev",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
