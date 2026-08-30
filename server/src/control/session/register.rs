@@ -4,6 +4,7 @@ use crate::tunnel::{
     format_local_addr, HttpTunnel, HttpsTunnel, RegisteredTunnel, TcpTunnel, UdpTunnel,
 };
 use anyhow::{anyhow, Result};
+use orbien_core::limit::BandwidthLimiter;
 use orbien_core::msg::{self, CloseTunnel, Message, NewTunnel, NewTunnelResp};
 use std::sync::Arc;
 
@@ -11,6 +12,23 @@ impl Control {
     fn note_tunnel_registered(&self, name: &str, tunnel_type: &str) {
         self.metrics
             .new_tunnel(name, tunnel_type, &self.user, &self.session_id);
+    }
+
+    fn tunnel_transport(np: &NewTunnel) -> Result<Option<Arc<BandwidthLimiter>>> {
+        let limiter = orbien_core::limit::limiter_if_side(
+            np.bandwidth,
+            &np.bandwidth_limit_side,
+            orbien_core::limit::BandwidthLimitSide::Server,
+        )?;
+        if let Some(ref l) = limiter {
+            tracing::info!(
+                tunnel = %np.tunnel_name,
+                bytes_per_sec = l.bytes_per_sec(),
+                mode = "server",
+                "bandwidth limit enabled"
+            );
+        }
+        Ok(limiter)
     }
 
     pub(super) async fn handle_new_tunnel(self: &Arc<Self>, np: NewTunnel) -> Result<()> {
@@ -47,19 +65,7 @@ impl Control {
             return Err(anyhow!("invalid remote_port"));
         }
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let limiter = Self::tunnel_transport(np)?;
 
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;
@@ -100,19 +106,7 @@ impl Control {
             .clone()
             .ok_or_else(|| anyhow!("http tunnel requires server httpGwPort > 0"))?;
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let limiter = Self::tunnel_transport(np)?;
 
         let name = np.tunnel_name.clone();
         {
@@ -153,19 +147,7 @@ impl Control {
             .clone()
             .ok_or_else(|| anyhow!("https tunnel requires server httpsGwPort > 0"))?;
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let limiter = Self::tunnel_transport(np)?;
 
         let name = np.tunnel_name.clone();
         {
@@ -205,19 +187,7 @@ impl Control {
             return Err(anyhow!("invalid remote_port"));
         }
 
-        let limiter = orbien_core::limit::limiter_if_side(
-            np.bandwidth,
-            &np.bandwidth_limit_side,
-            orbien_core::limit::BandwidthLimitSide::Server,
-        )?;
-        if let Some(ref l) = limiter {
-            tracing::info!(
-                tunnel = %np.tunnel_name,
-                bytes_per_sec = l.bytes_per_sec(),
-                mode = "server",
-                "bandwidth limit enabled"
-            );
-        }
+        let limiter = Self::tunnel_transport(np)?;
 
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;

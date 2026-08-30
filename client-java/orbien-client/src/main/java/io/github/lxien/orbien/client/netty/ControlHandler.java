@@ -144,10 +144,10 @@ public final class ControlHandler extends SimpleChannelInboundHandler<WireMessag
     private String formatRemoteAddr(String remoteAddr, OrbienClientConfig.TunnelConfig tunnel) {
         String remote = remoteAddr == null ? "" : remoteAddr.trim();
         if (remote.startsWith(":")) {
-            remote = config.getServerAddr() + remote;
+            remote = config.getServerHost() + remote;
         } else if (remote.isEmpty()) {
             if (tunnel != null && tunnel.getRemotePort() > 0) {
-                remote = config.getServerAddr() + ":" + tunnel.getRemotePort();
+                remote = config.getServerHost() + ":" + tunnel.getRemotePort();
             } else {
                 return "?";
             }

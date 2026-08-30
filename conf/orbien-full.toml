@@ -57,7 +57,6 @@ locations = ["/", "/api"]
 basicAuthUser = "admin"
 basicAuthPassword = "123456"
 hostHeaderRewrite = "127.0.0.1:8080"
-routeByHTTPUser = "lxien"
 
 [tunnels.transport]
 bandwidth = 10
@@ -90,10 +89,6 @@ service = "127.0.0.1:8080"
 certFile = "./certs/portal.crt"
 keyFile = "./certs/portal.key"
 hostHeaderRewrite = "127.0.0.1"
-
-[tunnels.plugin.requestHeaders.set]
-X-Forwarded-Proto = "https"
-X-Orbien-Tunnel = "portal"
 
 [[tunnels]]
 name = "socks5"

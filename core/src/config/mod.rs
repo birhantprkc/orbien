@@ -3,8 +3,8 @@ mod env;
 mod server;
 
 pub use client::{
-    ClientConfig, ClientTlsConfig, PluginConfig, PluginRequestHeaders, TransportConfig,
-    TunnelConfig, TunnelTransportConfig,
+    ClientConfig, ClientTlsConfig, PluginConfig, TransportConfig, TunnelConfig,
+    TunnelTransportConfig,
 };
 pub use env::{contains_env_placeholders, expand_env_placeholders};
 pub use server::{

@@ -18,7 +18,7 @@ function HeroDashboard(): ReactNode {
         isEn ? '/img/dashboard_en.png' : '/img/dashboard.png',
     );
     const darkSrc = useBaseUrl(
-        isEn ? '/img/dashboard_en_black.png' : '/img/dashboard_black.png',
+        isEn ? '/img/dashboard_en_dark.png' : '/img/dashboard_dark.png',
     );
 
     return (
@@ -86,8 +86,12 @@ function HomepageHeader(): ReactNode {
 
 function DesktopShowcase(): ReactNode {
     const {i18n} = useDocusaurusContext();
-    const gifSrc = useBaseUrl(
-        i18n.currentLocale === 'en' ? '/img/desktop_en.gif' : '/img/desktop_zh.gif',
+    const isEn = i18n.currentLocale === 'en';
+    const lightSrc = useBaseUrl(
+        isEn ? '/img/desktop_en.gif' : '/img/desktop_zh.gif',
+    );
+    const darkSrc = useBaseUrl(
+        isEn ? '/img/desktop_en_dark.gif' : '/img/desktop_zh_dark.gif',
     );
 
     return (
@@ -110,17 +114,18 @@ function DesktopShowcase(): ReactNode {
                 </div>
                 <div className={styles.desktopVisual}>
                     <div className={styles.desktopFrame}>
-                        <img
+                        <ThemedImage
                             className={styles.desktopGif}
-                            src={gifSrc}
                             alt={translate({
                                 id: 'homepage.desktop.alt',
                                 message: 'Orbien Desktop 客户端演示',
                             })}
                             width={1920}
                             height={1279}
-                            loading="lazy"
-                            decoding="async"
+                            sources={{
+                                light: lightSrc,
+                                dark: darkSrc,
+                            }}
                         />
                     </div>
                 </div>

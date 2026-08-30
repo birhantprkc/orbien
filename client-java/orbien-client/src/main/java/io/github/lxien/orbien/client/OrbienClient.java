@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 public final class OrbienClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(OrbienClient.class);
-    private static final String VERSION = "3.3.0";
+    private static final String VERSION = "3.4.0-beta.1";
 
     private final OrbienClientConfig config;
     private final AtomicBoolean started = new AtomicBoolean(false);
@@ -89,14 +89,14 @@ public final class OrbienClient implements AutoCloseable {
                     });
 
             ChannelFuture cf =
-                    b.connect(config.getServerAddr(), config.getServerPort()).sync();
+                    b.connect(connectHost(config.getServerHost()), config.getServerPort()).sync();
             controlChannel = cf.channel();
             sendLogin(controlChannel, previousSessionId);
 
             String id = loginFuture.get(30, TimeUnit.SECONDS);
             config.setSessionId(id);
             SessionIdStore.save(sessionIdPath, id);
-            log.info("connected to {}:{} sessionId={}", config.getServerAddr(), config.getServerPort(), id);
+            log.info("connected to {} sessionId={}", config.getServer(), id);
         } catch (Exception e) {
             close();
             throw new IllegalStateException("failed to start Orbien client: " + e.getMessage(), e);
@@ -161,7 +161,7 @@ public final class OrbienClient implements AutoCloseable {
                     }
                 });
 
-        b.connect(config.getServerAddr(), config.getServerPort())
+        b.connect(connectHost(config.getServerHost()), config.getServerPort())
                 .addListener(f -> {
                     if (!f.isSuccess()) {
                         log.error("failed to open data connection", f.cause());
@@ -176,6 +176,13 @@ public final class OrbienClient implements AutoCloseable {
                     data.writeAndFlush(new WireMessage(MsgType.NEW_DATA_CONN, nw));
                     log.debug("NewDataConn sent, sessionId={}", rid);
                 });
+    }
+
+    private static String connectHost(String host) {
+        if (host != null && host.startsWith("[") && host.endsWith("]") && host.length() > 2) {
+            return host.substring(1, host.length() - 1);
+        }
+        return host;
     }
 
     private static String localHostname() {

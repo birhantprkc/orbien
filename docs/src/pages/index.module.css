@@ -271,15 +271,6 @@
 .desktopFrame {
     width: min(100%, 680px);
     margin-inline: auto;
-    border-radius: 16px;
-    border: 1px solid var(--orbien-panel-border);
-    background: var(--orbien-panel-bg);
-    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.1);
-    overflow: hidden;
-}
-
-[data-theme='dark'] .desktopFrame {
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
 }
 
 .desktopGif {

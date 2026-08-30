@@ -1,6 +1,5 @@
 use super::gw::{
-    build_domains, expand_locations, normalize_host, route_basic_auth_ok, route_user_from_headers,
-    HttpGw, HttpRoute,
+    build_domains, expand_locations, normalize_host, route_basic_auth_ok, HttpGw, HttpRoute,
 };
 use crate::access::{prepare_ingress, AccessPolicy};
 use crate::control::Control;
@@ -36,7 +35,6 @@ impl HttpTunnel {
         let rewrite = np.host_header_rewrite.clone();
         let basic_auth_user = np.basic_auth_user.clone();
         let basic_auth_password = np.basic_auth_password.clone();
-        let route_by_http_user = np.route_by_http_user.clone();
 
         gw.unregister_tunnel(&name).await;
 
@@ -51,7 +49,6 @@ impl HttpTunnel {
                         host_header_rewrite: rewrite.clone(),
                         basic_auth_user: basic_auth_user.clone(),
                         basic_auth_password: basic_auth_password.clone(),
-                        route_by_http_user: route_by_http_user.clone(),
                         limiter: limiter.clone(),
                     },
                 )
@@ -63,7 +60,6 @@ impl HttpTunnel {
             tunnel = %name,
             domains = ?domains,
             locations = ?locations,
-            route_by_http_user = %route_by_http_user,
             basic_auth = !basic_auth_user.is_empty() || !basic_auth_password.is_empty(),
             "http tunnel registered"
         );
@@ -142,19 +138,12 @@ async fn handle_http_ingress(
     let mut ingress = prepare_ingress(stream, peer, &access).await?;
     let head = read_http_request_head(&mut ingress.stream).await?;
 
-    let route_user = route_user_from_headers(
-        head.is_proxy_request,
-        head.authorization.as_deref(),
-        head.proxy_authorization.as_deref(),
-    );
-
-    let Some(route) = gw.lookup(&head.host, &head.path, &route_user).await else {
+    let Some(route) = gw.lookup(&head.host, &head.path).await else {
         tracing::debug!(
             peer = %ingress.peer,
             source = %ingress.source,
             host = %head.host,
             path = %head.path,
-            %route_user,
             "http no route"
         );
         write_not_found(&mut ingress.stream).await;

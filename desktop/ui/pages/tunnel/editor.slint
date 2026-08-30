@@ -14,7 +14,6 @@ export component TunnelEditor inherits Rectangle {
     in-out property <string> edit-basic-auth-user: "";
     in-out property <string> edit-basic-auth-password: "";
     in-out property <string> edit-host-header-rewrite: "";
-    in-out property <string> edit-route-by-http-user: "";
     in-out property <string> edit-bandwidth-limit: "";
     in-out property <int> edit-bandwidth-side-index: 0;
     in-out property <int> edit-proxy-protocol-index: 0;
@@ -202,15 +201,10 @@ export component TunnelEditor inherits Rectangle {
                         placeholder: Tr.tunnel-locations-hint;
                     }
                     FormField {
-                        label: Tr.tunnel-route-by-http-user;
-                        value <=> root.edit-route-by-http-user;
-                        placeholder: Tr.tunnel-route-by-http-user-hint;
+                        label: Tr.tunnel-host-rewrite;
+                        value <=> root.edit-host-header-rewrite;
+                        placeholder: Tr.tunnel-host-rewrite-hint;
                     }
-                }
-                FormField {
-                    label: Tr.tunnel-host-rewrite;
-                    value <=> root.edit-host-header-rewrite;
-                    placeholder: Tr.tunnel-host-rewrite-hint;
                 }
             }
 
@@ -283,7 +277,7 @@ export component TunnelEditor inherits Rectangle {
                 }
             }
 
-            if root.is-tcp-udp || (root.is-https && !root.use-plugin): FormRow {
+            if root.is-tcp-udp || root.is-http || (root.is-https && !root.use-plugin): FormRow {
                 FormField {
                     label: Tr.tunnel-local-ip;
                     value <=> root.edit-local-ip;
@@ -322,7 +316,7 @@ export component TunnelEditor inherits Rectangle {
                 }
             }
 
-            if root.is-tcp-udp || (root.is-https && !root.use-plugin): FormRow {
+            if root.is-tcp-udp || root.is-http || (root.is-https && !root.use-plugin): FormRow {
                 FormCombo {
                     label: Tr.proxy-protocol;
                     model: [Tr.proxy-protocol-off, "v1", "v2"];

@@ -316,7 +316,6 @@ pub fn tunnel_from_parts(
     basic_auth_user: &str,
     basic_auth_password: &str,
     host_header_rewrite: &str,
-    route_by_http_user: &str,
     bandwidth: &str,
     bandwidth_limit_side: &str,
     proxy_protocol_version: &str,
@@ -343,7 +342,6 @@ pub fn tunnel_from_parts(
             cert_file: plugin_cert_file.trim().into(),
             key_file: plugin_key_file.trim().into(),
             host_header_rewrite: plugin_host_rewrite.trim().into(),
-            request_headers: Default::default(),
             username: String::new(),
             password: String::new(),
         })
@@ -373,7 +371,6 @@ pub fn tunnel_from_parts(
         basic_auth_user: basic_auth_user.trim().into(),
         basic_auth_password: basic_auth_password.trim().into(),
         host_header_rewrite: host_header_rewrite.trim().into(),
-        route_by_http_user: route_by_http_user.trim().into(),
         transport: TunnelTransportConfig {
             bandwidth: parse_bandwidth_mbps(bandwidth),
             bandwidth_limit_side: if bandwidth_limit_side.trim() == "server" {
@@ -425,7 +422,6 @@ pub fn tunnel_to_parts(p: &TunnelConfig) -> TunnelParts {
         basic_auth_user: p.basic_auth_user.clone(),
         basic_auth_password: p.basic_auth_password.clone(),
         host_header_rewrite: p.host_header_rewrite.clone(),
-        route_by_http_user: p.route_by_http_user.clone(),
         bandwidth: bandwidth_display(p.transport.bandwidth),
         bandwidth_limit_side: p.transport.bandwidth_limit_side.clone(),
         proxy_protocol_version: p.transport.proxy_protocol_version.clone(),
@@ -455,7 +451,6 @@ pub struct TunnelParts {
     pub basic_auth_user: String,
     pub basic_auth_password: String,
     pub host_header_rewrite: String,
-    pub route_by_http_user: String,
     pub bandwidth: String,
     pub bandwidth_limit_side: String,
     pub proxy_protocol_version: String,

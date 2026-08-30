@@ -20,7 +20,6 @@ export component TunnelPage inherits Rectangle {
     in-out property <string> edit-basic-auth-user: "";
     in-out property <string> edit-basic-auth-password: "";
     in-out property <string> edit-host-header-rewrite: "";
-    in-out property <string> edit-route-by-http-user: "";
     in-out property <string> edit-bandwidth-limit: "";
     in-out property <int> edit-bandwidth-side-index: 0;
     in-out property <int> edit-proxy-protocol-index: 0;
@@ -166,7 +165,6 @@ export component TunnelPage inherits Rectangle {
                     edit-basic-auth-user <=> root.edit-basic-auth-user;
                     edit-basic-auth-password <=> root.edit-basic-auth-password;
                     edit-host-header-rewrite <=> root.edit-host-header-rewrite;
-                    edit-route-by-http-user <=> root.edit-route-by-http-user;
                     edit-bandwidth-limit <=> root.edit-bandwidth-limit;
                     edit-bandwidth-side-index <=> root.edit-bandwidth-side-index;
                     edit-proxy-protocol-index <=> root.edit-proxy-protocol-index;

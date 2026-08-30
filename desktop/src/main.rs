@@ -94,7 +94,6 @@ fn row_to_tunnel(row: &TunnelRow) -> anyhow::Result<orbien_core::config::TunnelC
         row.basic_auth_user.as_str(),
         row.basic_auth_password.as_str(),
         row.host_header_rewrite.as_str(),
-        row.route_by_http_user.as_str(),
         row.bandwidth_limit.as_str(),
         row.bandwidth_limit_side.as_str(),
         row.proxy_protocol_version.as_str(),
@@ -122,7 +121,6 @@ fn tunnel_to_row(p: &orbien_core::config::TunnelConfig) -> TunnelRow {
         basic_auth_user: parts.basic_auth_user.into(),
         basic_auth_password: parts.basic_auth_password.into(),
         host_header_rewrite: parts.host_header_rewrite.into(),
-        route_by_http_user: parts.route_by_http_user.into(),
         bandwidth_limit: parts.bandwidth.into(),
         bandwidth_limit_side: parts.bandwidth_limit_side.into(),
         proxy_protocol_version: parts.proxy_protocol_version.into(),
@@ -351,7 +349,6 @@ fn reset_tunnel_form(ui: &AppWindow) {
     ui.set_tunnel_edit_basic_auth_user("".into());
     ui.set_tunnel_edit_basic_auth_password("".into());
     ui.set_tunnel_edit_host_header_rewrite("".into());
-    ui.set_tunnel_edit_route_by_http_user("".into());
     ui.set_tunnel_edit_bandwidth_limit("".into());
     ui.set_tunnel_edit_bandwidth_side_index(0);
     ui.set_tunnel_edit_proxy_protocol_index(0);
@@ -377,7 +374,6 @@ fn fill_tunnel_form(ui: &AppWindow, row: &TunnelRow) {
     ui.set_tunnel_edit_basic_auth_user(row.basic_auth_user.clone());
     ui.set_tunnel_edit_basic_auth_password(row.basic_auth_password.clone());
     ui.set_tunnel_edit_host_header_rewrite(row.host_header_rewrite.clone());
-    ui.set_tunnel_edit_route_by_http_user(row.route_by_http_user.clone());
     ui.set_tunnel_edit_bandwidth_limit(row.bandwidth_limit.clone());
     ui.set_tunnel_edit_bandwidth_side_index(bandwidth_side_index(
         row.bandwidth_limit_side.as_str(),
@@ -442,11 +438,6 @@ fn collect_tunnel_form(ui: &AppWindow) -> TunnelRow {
         },
         host_header_rewrite: if is_http {
             ui.get_tunnel_edit_host_header_rewrite()
-        } else {
-            "".into()
-        },
-        route_by_http_user: if is_http {
-            ui.get_tunnel_edit_route_by_http_user()
         } else {
             "".into()
         },
