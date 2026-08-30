@@ -12,9 +12,10 @@ import org.springframework.util.StringUtils;
 @ConfigurationProperties(prefix = "orbien")
 public class OrbienProperties {
     private static final String DEFAULT_LOCAL_IP = "127.0.0.1";
+    private static final String DEFAULT_SERVER = "127.0.0.1:9527";
+
     private boolean enabled = true;
-    private String serverAddr = "127.0.0.1";
-    private int serverPort = 9527;
+    private String server = DEFAULT_SERVER;
     private String token = "";
     private boolean tcpMux = false;
     private int poolCount = 1;
@@ -34,20 +35,12 @@ public class OrbienProperties {
         this.enabled = enabled;
     }
 
-    public String getServerAddr() {
-        return serverAddr;
+    public String getServer() {
+        return server;
     }
 
-    public void setServerAddr(String serverAddr) {
-        this.serverAddr = serverAddr;
-    }
-
-    public int getServerPort() {
-        return serverPort;
-    }
-
-    public void setServerPort(int serverPort) {
-        this.serverPort = serverPort;
+    public void setServer(String server) {
+        this.server = StringUtils.hasText(server) ? server.trim() : DEFAULT_SERVER;
     }
 
     public String getToken() {
@@ -119,8 +112,7 @@ public class OrbienProperties {
 
     public OrbienClientConfig toClientConfig() {
         OrbienClientConfig cfg = new OrbienClientConfig();
-        cfg.setServerAddr(serverAddr);
-        cfg.setServerPort(serverPort);
+        cfg.setServer(server);
         cfg.setToken(token);
         cfg.setTcpMux(tcpMux);
         cfg.setPoolCount(poolCount);

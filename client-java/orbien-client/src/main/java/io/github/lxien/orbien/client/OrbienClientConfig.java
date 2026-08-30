@@ -5,8 +5,11 @@ import java.util.List;
 import java.util.Objects;
 
 public final class OrbienClientConfig {
-    private String serverAddr = "127.0.0.1";
-    private int serverPort = 9527;
+    private static final String DEFAULT_SERVER = "127.0.0.1:9527";
+    private static final int DEFAULT_PORT = 9527;
+
+    private String server = DEFAULT_SERVER;
+
     private String token = "";
     private boolean tcpMux = false;
     private int poolCount = 1;
@@ -16,20 +19,23 @@ public final class OrbienClientConfig {
     private int heartbeatIntervalSecs = 30;
     private final List<TunnelConfig> tunnels = new ArrayList<>();
 
-    public String getServerAddr() {
-        return serverAddr;
+    public String getServer() {
+        return server;
     }
 
-    public void setServerAddr(String serverAddr) {
-        this.serverAddr = Objects.requireNonNull(serverAddr, "serverAddr");
+    public void setServer(String server) {
+        this.server = Objects.requireNonNull(server, "server").trim();
+        if (this.server.isEmpty()) {
+            this.server = DEFAULT_SERVER;
+        }
+    }
+
+    public String getServerHost() {
+        return parseHostPort(server).host;
     }
 
     public int getServerPort() {
-        return serverPort;
-    }
-
-    public void setServerPort(int serverPort) {
-        this.serverPort = serverPort;
+        return parseHostPort(server).port;
     }
 
     public String getToken() {
@@ -90,6 +96,70 @@ public final class OrbienClientConfig {
 
     public List<TunnelConfig> getTunnels() {
         return tunnels;
+    }
+
+    static HostPort parseHostPort(String raw) {
+        String s = raw == null ? "" : raw.trim();
+        if (s.isEmpty()) {
+            return new HostPort("127.0.0.1", DEFAULT_PORT);
+        }
+
+        if (s.startsWith("[")) {
+            int close = s.indexOf(']');
+            if (close < 0) {
+                throw new IllegalArgumentException("invalid server address '" + raw + "': missing ']'");
+            }
+            String hostInner = s.substring(1, close);
+            if (hostInner.isEmpty()) {
+                throw new IllegalArgumentException("invalid server address '" + raw + "': empty IPv6 host");
+            }
+            String host = "[" + hostInner + "]";
+            String after = s.substring(close + 1);
+            if (after.isEmpty()) {
+                return new HostPort(host, DEFAULT_PORT);
+            }
+            if (!after.startsWith(":")) {
+                throw new IllegalArgumentException(
+                        "invalid server address '" + raw + "': expected ':' after ']'");
+            }
+            String portStr = after.substring(1);
+            if (portStr.isEmpty()) {
+                return new HostPort(host, DEFAULT_PORT);
+            }
+            int port = parsePort(portStr, raw);
+            return new HostPort(host, port == 0 ? DEFAULT_PORT : port);
+        }
+
+        int colon = s.lastIndexOf(':');
+        if (colon > 0 && s.indexOf(':') == colon) {
+            String host = s.substring(0, colon);
+            String portStr = s.substring(colon + 1);
+            if (portStr.isEmpty()) {
+                return new HostPort(host, DEFAULT_PORT);
+            }
+            int port = parsePort(portStr, raw);
+            return new HostPort(host, port == 0 ? DEFAULT_PORT : port);
+        }
+
+        return new HostPort(s, DEFAULT_PORT);
+    }
+
+    private static int parsePort(String portStr, String raw) {
+        try {
+            return Integer.parseInt(portStr);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("invalid server port in '" + raw + "'", e);
+        }
+    }
+
+    static final class HostPort {
+        final String host;
+        final int port;
+
+        HostPort(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
     }
 
     public static final class TunnelConfig {

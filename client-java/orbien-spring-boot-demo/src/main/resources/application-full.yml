@@ -1,7 +1,6 @@
 orbien:
   enabled: true
-  server-addr: 127.0.0.1
-  server-port: 9527
+  server: "127.0.0.1:9527"
   token: YOUR_TOKEN
   tcp-mux: false
   pool-count: 1

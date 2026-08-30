@@ -38,7 +38,7 @@ import TabItem from '@theme/TabItem';
 # application.yml
 orbien:
   enabled: true
-  server-addr: 127.0.0.1
+  server: "127.0.0.1:9527"
   # token: YOUR_TOKEN # 可选
   tunnel:
     protocol: http
@@ -63,8 +63,7 @@ tcpMux = false # 关闭 TCP 多路复用
 # application.yml
 orbien:
   enabled: true
-  server-addr: 127.0.0.1
-  server-port: 9527
+  server: "127.0.0.1:9527"
   token: YOUR_TOKEN
   tcp-mux: false # 必须为 false，且与服务端一致
   pool-count: 1 # 登录时预申请的数据连接池大小
