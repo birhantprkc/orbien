@@ -25,6 +25,13 @@ fn locale_of(ui: &AppWindow) -> Locale {
     Locale::from_index(ui.get_locale_index())
 }
 
+fn sync_tray_locale(tray: &OrbienTray, locale_index: i32) {
+    let tr = tray.global::<Tr>();
+    if tr.get_locale_index() != locale_index {
+        tr.set_locale_index(locale_index);
+    }
+}
+
 fn apply_theme(ui: &AppWindow, theme_index: i32) {
     ui.set_theme_index(theme_index);
 }
@@ -671,6 +678,16 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_locale_index(prefs.locale_index());
     let _ = ui.global::<Tr>().set_locale_index(ui.get_locale_index());
     apply_theme(&ui, prefs.theme_index());
+
+    let tray = OrbienTray::new()?;
+    sync_tray_locale(&tray, ui.get_locale_index());
+    let tray_weak = tray.as_weak();
+    tray.on_quit(|| {
+        runtime::stop_async(|| {
+            let _ = slint::quit_event_loop();
+        });
+    });
+
     let default_path = config_bridge::default_config_path();
     ui.set_config_file_path(config_bridge::path_display(&default_path).into());
 
@@ -912,7 +929,7 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    wire_tunnel_and_config(&ui, remotes_gen.clone());
+    wire_tunnel_and_config(&ui, remotes_gen.clone(), tray_weak);
 
     let ui_weak = ui.as_weak();
     ui.on_show_about(move || {
@@ -946,7 +963,9 @@ fn main() -> Result<(), slint::PlatformError> {
 
     ui.show()?;
     center_window_on_screen(&ui);
-    ui.run()
+    let result = ui.run();
+    drop(tray);
+    result
 }
 
 fn center_window_on_screen(ui: &AppWindow) {
@@ -994,7 +1013,11 @@ fn open_url(url: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn wire_tunnel_and_config(ui: &AppWindow, remotes_gen: Arc<Mutex<u64>>) {
+fn wire_tunnel_and_config(
+    ui: &AppWindow,
+    remotes_gen: Arc<Mutex<u64>>,
+    tray_weak: slint::Weak<OrbienTray>,
+) {
     let ui_weak = ui.as_weak();
     ui.on_tunnel_add(move || {
         if let Some(ui) = ui_weak.upgrade() {
@@ -1298,12 +1321,16 @@ fn wire_tunnel_and_config(ui: &AppWindow, remotes_gen: Arc<Mutex<u64>>) {
 
     let ui_weak = ui.as_weak();
     ui.on_locale_changed(move |index| {
-        if let Some(ui) = ui_weak.upgrade() {
-            ui.global::<Tr>().set_locale_index(index);
-            let label = if index == 0 { "zh-CN" } else { "en-US" };
-            push_log(&ui, &format!("INFO  locale set to {label}"));
-            persist_prefs(&ui);
+        let Some(ui) = ui_weak.upgrade() else {
+            return;
+        };
+        ui.global::<Tr>().set_locale_index(index);
+        if let Some(tray) = tray_weak.upgrade() {
+            sync_tray_locale(&tray, index);
         }
+        let label = if index == 0 { "zh-CN" } else { "en-US" };
+        push_log(&ui, &format!("INFO  locale set to {label}"));
+        persist_prefs(&ui);
     });
 
     let ui_weak = ui.as_weak();
