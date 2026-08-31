@@ -37,4 +37,3 @@ Open `http://SERVER_IP:8020` in a browser and sign in with username and password
 | `dashboard.port`        | Yes      | `0`           | Listen port; `0` disables the dashboard      |
 | `dashboard.user`        | Yes      |               | Login username                               |
 | `dashboard.password`    | Yes      |               | Login password                               |
-| `dashboard.staticDir`   | No       |               | Static assets directory; empty uses the built-in frontend |

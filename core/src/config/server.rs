@@ -103,9 +103,6 @@ pub struct DashboardConfig {
     pub user: String,
     #[serde(default)]
     pub password: String,
-
-    #[serde(default, rename = "staticDir", alias = "static_dir")]
-    pub static_dir: String,
 }
 
 impl DashboardConfig {
@@ -319,10 +316,6 @@ impl ServerConfig {
         tls.cert_file = super::resolve_maybe_relative(base, &tls.cert_file);
         tls.key_file = super::resolve_maybe_relative(base, &tls.key_file);
         tls.trusted_ca_file = super::resolve_maybe_relative(base, &tls.trusted_ca_file);
-        if !self.dashboard.static_dir.trim().is_empty() {
-            self.dashboard.static_dir =
-                super::resolve_maybe_relative(base, &self.dashboard.static_dir);
-        }
     }
 
     pub fn from_defaults() -> Self {

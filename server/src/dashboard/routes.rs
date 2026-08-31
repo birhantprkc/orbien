@@ -15,7 +15,6 @@ use base64::Engine;
 use orbien_core::VERSION;
 use rust_embed::Embed;
 use serde::Deserialize;
-use std::path::{Component, Path as FsPath, PathBuf};
 use std::sync::Arc;
 
 #[derive(Embed)]
@@ -79,33 +78,22 @@ fn authorized(state: &DashState, headers: &HeaderMap) -> bool {
     u == state.cfg.user && p == state.cfg.password
 }
 
-async fn index_html(State(state): State<Arc<DashState>>) -> Response {
-    if let Some(bytes) = load_override(&state.cfg.static_dir, "index.html") {
-        return bytes_response("text/html; charset=utf-8", bytes);
-    }
+async fn index_html() -> Response {
     serve_asset("index.html")
 }
 
-async fn favicon(State(state): State<Arc<DashState>>) -> Response {
-    if let Some(bytes) = load_override(&state.cfg.static_dir, "favicon.ico") {
-        return bytes_response("image/x-icon", bytes);
-    }
-    if let Some(res) = try_embedded("favicon.ico") {
-        return res;
-    }
-    StatusCode::NOT_FOUND.into_response()
+async fn favicon() -> Response {
+    try_embedded("favicon.ico").unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
-async fn static_file(State(state): State<Arc<DashState>>, Path(path): Path<String>) -> Response {
+async fn static_file(Path(path): Path<String>) -> Response {
     let rel = path.trim_start_matches('/');
-    if let Some(bytes) = load_override(&state.cfg.static_dir, rel) {
-        return bytes_response(content_type(rel), bytes);
+    if !is_safe_asset_path(rel) {
+        return StatusCode::NOT_FOUND.into_response();
     }
-
     if let Some(res) = try_embedded(rel) {
         return res;
     }
-
     serve_asset("index.html")
 }
 
@@ -350,24 +338,8 @@ fn from_hex(b: u8) -> Option<u8> {
     }
 }
 
-fn load_override(static_dir: &str, rel: &str) -> Option<Vec<u8>> {
-    if static_dir.trim().is_empty() {
-        return None;
-    }
-    let path = safe_join(FsPath::new(static_dir), rel)?;
-    std::fs::read(path).ok()
-}
-
-fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
-    let mut out = base.to_path_buf();
-    for c in FsPath::new(rel).components() {
-        match c {
-            Component::Normal(x) => out.push(x),
-            Component::CurDir => {}
-            _ => return None,
-        }
-    }
-    Some(out)
+fn is_safe_asset_path(path: &str) -> bool {
+    !path.is_empty() && !path.contains("..")
 }
 
 fn content_type(path: &str) -> &'static str {
