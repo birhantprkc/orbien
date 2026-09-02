@@ -1,29 +1,21 @@
-ARG RUST_VERSION=1.88
+FROM alpine:3.21 AS pick
 
-FROM node:22-bookworm AS web
-WORKDIR /src
-COPY server-ui/package.json server-ui/package-lock.json ./server-ui/
-RUN cd server-ui && npm ci
-COPY server-ui/ ./server-ui/
-RUN mkdir -p server/assets && cd server-ui && npm run build
+ARG TARGETPLATFORM
+COPY docker_context /tmp/artifacts
+WORKDIR /tmp/output
+RUN set -eux; \
+    case "$TARGETPLATFORM" in \
+      linux/amd64) ARCH=amd64 ;; \
+      linux/arm64) ARCH=arm64 ;; \
+      *) echo "Unsupported architecture: $TARGETPLATFORM"; exit 1 ;; \
+    esac; \
+    cp "/tmp/artifacts/orbien-server-linux-${ARCH}/orbien-server" .
 
-FROM rust:${RUST_VERSION}-bookworm AS build
-WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
-COPY core ./core
-COPY client ./client
-COPY server ./server
-COPY desktop ./desktop
-COPY --from=web /src/server/assets ./server/assets
-RUN cargo build --release -p orbien-server \
-    && strip target/release/orbien-server
+FROM alpine:3.21
 
-FROM debian:bookworm-slim
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=build /src/target/release/orbien-server /usr/local/bin/orbien-server
+RUN apk add --no-cache ca-certificates tini
+COPY --from=pick --chmod=755 /tmp/output/orbien-server /usr/local/bin/orbien-server
 COPY docker/conf/orbien-server.toml /etc/orbien/orbien-server.toml
 EXPOSE 9527/tcp 9527/udp 9528/udp 80/tcp 443/tcp 8020/tcp
-ENTRYPOINT ["orbien-server"]
+ENTRYPOINT ["/sbin/tini", "--", "orbien-server"]
 CMD ["-c", "/etc/orbien/orbien-server.toml"]

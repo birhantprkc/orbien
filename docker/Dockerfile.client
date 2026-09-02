@@ -1,21 +1,20 @@
-# orbien (CLI client) — multi-stage image
-ARG RUST_VERSION=1.88
+FROM alpine:3.21 AS pick
 
-FROM rust:${RUST_VERSION}-bookworm AS build
-WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
-COPY core ./core
-COPY client ./client
-COPY server ./server
-COPY desktop ./desktop
-RUN cargo build --release -p orbien-client \
-    && strip target/release/orbien
+ARG TARGETPLATFORM
+COPY docker_context /tmp/artifacts
+WORKDIR /tmp/output
+RUN set -eux; \
+    case "$TARGETPLATFORM" in \
+      linux/amd64) ARCH=amd64 ;; \
+      linux/arm64) ARCH=arm64 ;; \
+      *) echo "Unsupported architecture: $TARGETPLATFORM"; exit 1 ;; \
+    esac; \
+    cp "/tmp/artifacts/orbien-linux-${ARCH}/orbien" .
 
-FROM debian:bookworm-slim
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=build /src/target/release/orbien /usr/local/bin/orbien
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tini
+COPY --from=pick --chmod=755 /tmp/output/orbien /usr/local/bin/orbien
 COPY docker/conf/orbien.toml /etc/orbien/orbien.toml
-ENTRYPOINT ["orbien"]
+ENTRYPOINT ["/sbin/tini", "--", "orbien"]
 CMD ["-c", "/etc/orbien/orbien.toml"]

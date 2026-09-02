@@ -1,0 +1,19 @@
+name: Build server-ui
+description: Install npm deps and build server dashboard assets
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: npm
+        cache-dependency-path: server-ui/package-lock.json
+
+    - name: Build server-ui
+      shell: bash
+      working-directory: server-ui
+      run: |
+        npm ci
+        npm run build
