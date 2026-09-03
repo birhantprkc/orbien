@@ -3,7 +3,7 @@ use crate::handle::ClientStatus;
 use crate::reload::{
     empty_outcome, outcome_from_plan, outcome_level, plan_reload, ReloadOutcome, ReloadPlan,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use orbien_core::config::ClientConfig;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -114,7 +114,6 @@ impl Service {
                         fail_pending_reload(&mut pending_reload_reply, &rej.to_string());
                         tracing::error!(reason = %rej.reason, "login rejected, stopping");
                         on_log(format!("ERROR {rej}"));
-                        on_status(ClientStatus::Stopped);
                         return Err(e);
                     }
                     on_log(format!("ERROR failed to connect: {e}"));
@@ -174,7 +173,7 @@ impl Service {
                             "kicked by server, stopping"
                         );
                         on_log(format!("WARN  kicked by server: {reason}"));
-                        return Ok(());
+                        return Err(anyhow!("kicked by server: {reason}"));
                     }
                     Ok(SessionEnd::Disconnected { session_id: rid }) => {
                         if cancel.is_cancelled() {

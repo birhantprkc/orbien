@@ -732,7 +732,20 @@ fn main() -> Result<(), slint::PlatformError> {
 
     if default_path.is_file() {
         match orbien_client::ClientConfig::load_for_edit(&default_path) {
-            Ok(cfg) => {
+            Ok(mut cfg) => {
+                if config_bridge::ensure_agent_id(&mut cfg) {
+                    if let Err(e) = config_bridge::save(&default_path, &cfg) {
+                        log_store()
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push_raw(&format!("WARN  failed to persist agent_id: {e}"));
+                    } else {
+                        log_store()
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push_raw(&format!("INFO  assigned agent_id {}", cfg.agent_id));
+                    }
+                }
                 apply_config_to_ui(&ui, &cfg);
                 log_store()
                     .lock()
@@ -814,10 +827,25 @@ fn main() -> Result<(), slint::PlatformError> {
                         .map_err(|e| e.to_string())
                     })();
                 match start_cfg {
-                    Ok((cfg, path)) => {
+                    Ok((mut cfg, path)) => {
+                        if config_bridge::ensure_agent_id(&mut cfg) {
+                            if let Err(e) = config_bridge::save(&path, &cfg) {
+                                ui.set_running(false);
+                                let detail = e.to_string();
+                                toast_err(&ui, i18n::client_start_failed(loc, &detail));
+                                push_log(
+                                    &ui,
+                                    &format!("ERROR failed to persist agent_id: {detail}"),
+                                );
+                                ui.set_busy(false);
+                                return;
+                            }
+                            push_log(&ui, &format!("INFO  assigned agent_id {}", cfg.agent_id));
+                        }
                         tracing::info!(
                             config = %path.display(),
                             server = %cfg.server_endpoint(),
+                            agent_id = %cfg.agent_id,
                             "starting in-process client"
                         );
                         match runtime::start(cfg, path) {
@@ -875,12 +903,21 @@ fn main() -> Result<(), slint::PlatformError> {
 
             let st = runtime::status();
             let running = st.is_active();
-            if ui.get_running() != running {
+            let was_running = ui.get_running();
+            if was_running != running {
                 ui.set_running(running);
-                if !running {
+                if was_running && !running {
                     *started_at_tick.lock().unwrap_or_else(|e| e.into_inner()) = None;
                     *last_uptime_secs.lock().unwrap_or_else(|e| e.into_inner()) = u64::MAX;
                     ui.set_running_label("—".into());
+                    if let Some(err) = runtime::take_last_error() {
+                        let loc = locale_of(&ui);
+                        let detail = err.trim();
+                        if !detail.is_empty() {
+                            toast_err(&ui, i18n::client_stopped_error(loc, detail));
+                            push_log(&ui, &format!("ERROR {detail}"));
+                        }
+                    }
                 }
             }
             if running {

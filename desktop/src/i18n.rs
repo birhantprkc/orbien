@@ -162,6 +162,10 @@ pub fn client_start_failed(locale: Locale, err: &str) -> String {
     msg_fmt(locale, "msg.client-start-failed", &[("{err}", err)])
 }
 
+pub fn client_stopped_error(locale: Locale, err: &str) -> String {
+    msg_fmt(locale, "msg.client-stopped-error", &[("{err}", err)])
+}
+
 pub fn format_uptime(locale: Locale, secs: u64) -> String {
     if secs < 60 {
         msg_fmt(

@@ -24,6 +24,10 @@ pub fn status() -> ClientStatus {
     handle().status()
 }
 
+pub fn take_last_error() -> Option<String> {
+    handle().take_last_error()
+}
+
 pub fn drain_logs() -> Vec<String> {
     handle().drain_logs()
 }
