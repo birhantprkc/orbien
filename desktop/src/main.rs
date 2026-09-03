@@ -3,6 +3,8 @@ mod client_log_layer;
 mod config_bridge;
 mod i18n;
 mod log_buffer;
+#[cfg(target_os = "macos")]
+mod macos_reopen;
 mod pick_file;
 mod process_stats;
 mod runtime;
@@ -29,6 +31,17 @@ fn sync_tray_locale(tray: &OrbienTray, locale_index: i32) {
     let tr = tray.global::<Tr>();
     if tr.get_locale_index() != locale_index {
         tr.set_locale_index(locale_index);
+    }
+}
+
+fn reveal_main_window(ui: &AppWindow) {
+    let _ = ui.show();
+    use slint::winit_030::WinitWindowAccessor;
+    let window = ui.window();
+    if window.has_winit_window() {
+        window.with_winit_window(|w| {
+            w.focus_window();
+        });
     }
 }
 
@@ -682,6 +695,23 @@ fn main() -> Result<(), slint::PlatformError> {
     let tray = OrbienTray::new()?;
     sync_tray_locale(&tray, ui.get_locale_index());
     let tray_weak = tray.as_weak();
+    {
+        let ui_weak = ui.as_weak();
+        tray.on_show_window(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                reveal_main_window(&ui);
+            }
+        });
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let ui_weak = ui.as_weak();
+        macos_reopen::install(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                reveal_main_window(&ui);
+            }
+        });
+    }
     tray.on_quit(|| {
         runtime::stop_async(|| {
             let _ = slint::quit_event_loop();
