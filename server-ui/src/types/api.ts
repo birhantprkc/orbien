@@ -41,6 +41,7 @@ export interface SystemStatus {
 
 export interface ClientInfo {
     sessionId: string
+    agentId?: string
     user: string
     hostname: string
     os: string

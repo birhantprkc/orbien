@@ -243,7 +243,7 @@ const descItems = computed<DescItem[]>(() =>
     </SectionCard>
 
     <SectionCard class="config-panel" :title="t('monitor.serverConfig')">
-      <DescList v-if="configFields.length" :items="descItems">
+      <DescList v-if="configFields.length" :items="descItems" :columns="3">
         <template v-for="field in configFields" :key="field.key" #[field.key]>
           <ConfigValue :type="field.type" :value="field.value"/>
         </template>

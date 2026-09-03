@@ -1,4 +1,3 @@
-# === Rust / Cargo ===
 /target/
 **/target/
 /debug/
@@ -67,9 +66,9 @@ docs/.docusaurus
 /desktop/ui/version.slint
 /desktop/assets/fonts/source/
 /desktop/assets/fonts/.tools/
+/docker_context/
+/docker_slice/
 /dev
-/bak/
-.idea/
 .vscode/
 
 

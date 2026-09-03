@@ -18,6 +18,14 @@ impl RegisteredTunnel {
         }
     }
 
+    pub fn remote_port(&self) -> Option<u16> {
+        match self {
+            Self::Tcp(t) => Some(t.remote_port),
+            Self::Udp(u) => Some(u.remote_port),
+            Self::Http(_) | Self::Https(_) => None,
+        }
+    }
+
     pub async fn close(&self) {
         match self {
             Self::Tcp(p) => p.close().await,
@@ -26,6 +34,11 @@ impl RegisteredTunnel {
             Self::Udp(p) => p.close().await,
         }
     }
+}
+
+pub struct DetachedTunnel {
+    pub tunnel_type: &'static str,
+    pub remote_port: Option<u16>,
 }
 
 struct TunnelEntry {
@@ -44,39 +57,59 @@ impl TunnelManager {
         }
     }
 
-    pub async fn insert(
+    pub fn insert(
         &mut self,
         name: String,
         tunnel: RegisteredTunnel,
         local_addr: String,
-    ) -> Option<&'static str> {
-        let entry = TunnelEntry { tunnel, local_addr };
-        if let Some(old) = self.tunnels.insert(name, entry) {
-            let ty = old.tunnel.tunnel_type();
-            old.tunnel.close().await;
-            Some(ty)
-        } else {
-            None
+    ) -> Result<(), RegisteredTunnel> {
+        use std::collections::hash_map::Entry;
+        match self.tunnels.entry(name) {
+            Entry::Vacant(slot) => {
+                slot.insert(TunnelEntry { tunnel, local_addr });
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(tunnel),
         }
     }
 
-    pub async fn remove(&mut self, name: &str) -> Option<&'static str> {
+    pub async fn remove(&mut self, name: &str) -> Option<DetachedTunnel> {
         if let Some(entry) = self.tunnels.remove(name) {
-            let ty = entry.tunnel.tunnel_type();
+            let detached = DetachedTunnel {
+                tunnel_type: entry.tunnel.tunnel_type(),
+                remote_port: entry.tunnel.remote_port(),
+            };
             entry.tunnel.close().await;
-            Some(ty)
+            Some(detached)
         } else {
             None
         }
     }
 
-    pub async fn close_all(&mut self) -> Vec<(String, &'static str)> {
+    pub async fn close_all(&mut self) -> Vec<(String, DetachedTunnel)> {
         let mut closed = Vec::with_capacity(self.tunnels.len());
         for (name, entry) in self.tunnels.drain() {
-            closed.push((name, entry.tunnel.tunnel_type()));
+            let detached = DetachedTunnel {
+                tunnel_type: entry.tunnel.tunnel_type(),
+                remote_port: entry.tunnel.remote_port(),
+            };
             entry.tunnel.close().await;
+            closed.push((name, detached));
         }
         closed
+    }
+
+    pub fn abandon_all(&mut self) -> Vec<(String, DetachedTunnel)> {
+        self.tunnels
+            .drain()
+            .map(|(name, entry)| {
+                let detached = DetachedTunnel {
+                    tunnel_type: entry.tunnel.tunnel_type(),
+                    remote_port: entry.tunnel.remote_port(),
+                };
+                (name, detached)
+            })
+            .collect()
     }
 
     pub fn summaries(&self) -> Vec<TunnelSummary> {

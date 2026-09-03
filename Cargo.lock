@@ -4003,7 +4003,7 @@ dependencies = [
 
 [[package]]
 name = "orbien-client"
-version = "3.4.0"
+version = "3.5.0-beta.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4025,7 +4025,7 @@ dependencies = [
 
 [[package]]
 name = "orbien-core"
-version = "3.4.0"
+version = "3.5.0-beta.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -4057,10 +4057,11 @@ dependencies = [
 
 [[package]]
 name = "orbien-desktop"
-version = "3.4.0"
+version = "3.5.0-beta.1"
 dependencies = [
  "anyhow",
  "libc",
+ "objc2 0.6.4",
  "orbien-client",
  "orbien-core",
  "rfd",
@@ -4071,12 +4072,13 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "winres",
 ]
 
 [[package]]
 name = "orbien-server"
-version = "3.4.0"
+version = "3.5.0-beta.1"
 dependencies = [
  "anyhow",
  "axum",

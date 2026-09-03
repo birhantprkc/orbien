@@ -1,0 +1,29 @@
+import { Tr } from "i18n.slint";
+
+export component OrbienTray inherits SystemTrayIcon {
+    icon: @image-url("../assets/logo.png");
+    tooltip: Tr.tray-tooltip;
+
+    callback show-window();
+    callback quit();
+
+    clicked => {
+        root.show-window();
+    }
+
+    Menu {
+        MenuItem {
+            title: Tr.tray-show;
+            activated => {
+                root.show-window();
+            }
+        }
+        MenuSeparator {}
+        MenuItem {
+            title: Tr.tray-quit;
+            activated => {
+                root.quit();
+            }
+        }
+    }
+}

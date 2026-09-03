@@ -1,0 +1,255 @@
+name: Release Binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: "1.92"
+
+jobs:
+  build-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            goos: linux
+            goarch: amd64
+            libc: gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            goos: linux
+            goarch: amd64
+            libc: musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            goos: linux
+            goarch: arm64
+            libc: gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            goos: linux
+            goarch: arm64
+            libc: musl
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            goos: windows
+            goarch: amd64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            goos: windows
+            goarch: arm64
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            goos: darwin
+            goarch: amd64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build server-ui
+        uses: ./.github/actions/build-server-ui
+
+      - name: Install musl toolchain
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+
+      - name: Build orbien-server + orbien
+        shell: bash
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: |
+          cargo build --release --locked \
+            -p orbien-server -p orbien-client \
+            --target ${{ matrix.target }}
+
+      - name: Install UPX (Linux musl)
+        if: matrix.goos == 'linux' && matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          UPX_VERSION=4.2.4
+          case "$(uname -m)" in
+            x86_64) UPX_ARCH=amd64 ;;
+            aarch64) UPX_ARCH=arm64 ;;
+            *) UPX_ARCH=amd64 ;;
+          esac
+          UPX_PKG="upx-${UPX_VERSION}-${UPX_ARCH}_linux"
+          curl -fsSL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/${UPX_PKG}.tar.xz" | tar xJ
+          echo "UPX_BIN=${PWD}/${UPX_PKG}/upx" >> "$GITHUB_ENV"
+
+      - name: UPX compress binaries
+        if: matrix.goos == 'linux' && matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          BIN_DIR="target/${{ matrix.target }}/release"
+          for bin in "${BIN_DIR}/orbien" "${BIN_DIR}/orbien-server"; do
+            "$UPX_BIN" --lzma --best "$bin" || true
+          done
+
+      - name: Stage Docker slice
+        if: matrix.goos == 'linux' && matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          chmod +x scripts/stage-docker-slice.sh
+          ./scripts/stage-docker-slice.sh \
+            --arch "${{ matrix.goarch }}" \
+            --bin-dir "target/${{ matrix.target }}/release"
+
+      - name: Upload Docker slice
+        if: matrix.goos == 'linux' && matrix.libc == 'musl'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-slice-${{ matrix.goarch }}
+          path: docker_slice/
+          if-no-files-found: error
+
+      - name: Package tarballs
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/pack-release.sh
+          VERSION="${{ inputs.version }}"
+          TARGET="${{ matrix.target }}"
+          OUT="dist/release"
+          EXT=""
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            EXT=".exe"
+          fi
+          BIN_DIR="target/${TARGET}/release"
+          LIBC="${{ matrix.libc }}"
+
+          pack_one() {
+            local name="$1"
+            local bin="$2"
+            local conf="$3"
+            if [[ -n "$LIBC" ]]; then
+              ./scripts/pack-release.sh \
+                --name "$name" \
+                --version "$VERSION" \
+                --os "${{ matrix.goos }}" \
+                --arch "${{ matrix.goarch }}" \
+                --libc "$LIBC" \
+                --outdir "$OUT" \
+                --bin "$bin" \
+                --config "$conf"
+            else
+              ./scripts/pack-release.sh \
+                --name "$name" \
+                --version "$VERSION" \
+                --os "${{ matrix.goos }}" \
+                --arch "${{ matrix.goarch }}" \
+                --outdir "$OUT" \
+                --bin "$bin" \
+                --config "$conf"
+            fi
+          }
+
+          pack_one orbien-server \
+            "${BIN_DIR}/orbien-server${EXT}" \
+            conf/orbien-server.toml
+          pack_one orbien \
+            "${BIN_DIR}/orbien${EXT}" \
+            conf/orbien.toml
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/release/*.tar.gz
+          if-no-files-found: error
+
+  build-cli-freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build server-ui
+        uses: ./.github/actions/build-server-ui
+
+      - name: Build & pack CLI on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14"
+          arch: x86_64
+          mem: 8192
+          usesh: true
+          sync: rsync
+          copyback: true
+          envs: "RUST_VERSION VERSION"
+          prepare: |
+            set -e
+            pkg install -y bash curl git gmake pkgconf ca_root_nss
+            export PATH="$HOME/.cargo/bin:/usr/local/bin:$PATH"
+            if [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}"
+            fi
+            . "$HOME/.cargo/env"
+            rustup default "${RUST_VERSION}"
+          run: |
+            set -euo pipefail
+            export PATH="$HOME/.cargo/bin:/usr/local/bin:$PATH"
+            if [ -f "$HOME/.cargo/env" ]; then
+              . "$HOME/.cargo/env"
+            fi
+
+            cargo build --release --locked -p orbien-server -p orbien-client
+            ./target/release/orbien-server --help >/dev/null
+            ./target/release/orbien --help >/dev/null
+
+            OUT="dist/release"
+            mkdir -p "$OUT"
+            bash scripts/pack-release.sh \
+              --name orbien-server \
+              --version "$VERSION" \
+              --os freebsd \
+              --arch amd64 \
+              --outdir "$OUT" \
+              --bin target/release/orbien-server \
+              --config conf/orbien-server.toml
+            bash scripts/pack-release.sh \
+              --name orbien \
+              --version "$VERSION" \
+              --os freebsd \
+              --arch amd64 \
+              --outdir "$OUT" \
+              --bin target/release/orbien \
+              --config conf/orbien.toml
+            ls -lh "$OUT"
+        env:
+          RUST_VERSION: ${{ env.RUST_VERSION }}
+          VERSION: ${{ inputs.version }}
+
+      - name: Upload FreeBSD CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-freebsd-amd64
+          path: dist/release/*.tar.gz
+          if-no-files-found: error

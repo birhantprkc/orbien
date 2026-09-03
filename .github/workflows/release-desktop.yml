@@ -1,0 +1,113 @@
+name: Release Desktop
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: "1.92"
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            artifact: deb
+          - os: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            artifact: deb
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            artifact: windows
+          - os: windows-11-arm
+            goos: windows
+            goarch: arm64
+            artifact: windows
+          - os: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            artifact: dmg
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            artifact: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-${{ matrix.os }}-${{ matrix.goarch }}
+
+      - name: Install Linux GUI deps
+        if: matrix.artifact == 'deb'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            libfontconfig1-dev
+
+      - name: Build orbien-desktop
+        shell: bash
+        run: cargo build --release --locked -p orbien-desktop
+
+      - name: Package macOS DMG
+        if: matrix.artifact == 'dmg'
+        shell: bash
+        run: |
+          chmod +x scripts/pack-desktop-macos.sh
+          ./scripts/pack-desktop-macos.sh \
+            --version "${{ inputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
+
+      - name: Package Windows EXE + ZIP
+        if: matrix.artifact == 'windows'
+        shell: bash
+        run: |
+          chmod +x scripts/pack-desktop-windows.sh
+          ./scripts/pack-desktop-windows.sh \
+            --bin target/release/orbien-desktop.exe \
+            --version "${{ inputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
+
+      - name: Package Linux DEB
+        if: matrix.artifact == 'deb'
+        shell: bash
+        run: |
+          chmod +x scripts/pack-desktop-linux-deb.sh
+          ./scripts/pack-desktop-linux-deb.sh \
+            --version "${{ inputs.version }}" \
+            --arch "${{ matrix.goarch }}" \
+            --outdir dist/desktop
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/desktop/*.dmg
+            dist/desktop/*.zip
+            dist/desktop/*.exe
+            dist/desktop/*.deb
+          if-no-files-found: error

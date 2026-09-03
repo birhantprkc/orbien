@@ -89,6 +89,14 @@ impl ClientHandle {
             .clone()
     }
 
+    pub fn take_last_error(&self) -> Option<String> {
+        self.inner
+            .last_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    }
+
     pub fn push_log(&self, line: impl Into<String>) {
         self.enqueue_log(line.into());
     }
@@ -227,18 +235,19 @@ impl ClientHandle {
         let handle = self.clone();
         let join = tokio::spawn(async move {
             let result = handle.run_inner(cfg, config_path, opts, false).await;
-            if let Err(e) = result {
+            if let Err(e) = &result {
                 tracing::error!(error = %e, "client service ended with error");
                 handle.set_error(Some(e.to_string()));
             }
             handle.clear_tunnel_remotes();
-            handle.set_status(ClientStatus::Stopped);
             handle.clear_reload_tx();
             *handle
                 .inner
                 .cancel
                 .lock()
                 .unwrap_or_else(|e| e.into_inner()) = None;
+            handle.set_status(ClientStatus::Stopped);
+            let _ = result;
         });
         *self.inner.join.lock().unwrap_or_else(|e| e.into_inner()) = Some(join);
         Ok(())
@@ -313,7 +322,7 @@ impl ClientHandle {
             Arc::new(move || h.clear_tunnel_remotes())
         };
 
-        let result = Service::new(cfg, config_path.clone())
+        let result = Service::new(cfg)
             .run(
                 cancel.clone(),
                 &mut reload_rx,
@@ -328,12 +337,12 @@ impl ClientHandle {
 
         if is_foreground {
             self.clear_tunnel_remotes();
-            self.set_status(ClientStatus::Stopped);
             self.clear_reload_tx();
             *self.inner.cancel.lock().unwrap_or_else(|e| e.into_inner()) = None;
             if let Err(ref e) = result {
                 self.set_error(Some(e.to_string()));
             }
+            self.set_status(ClientStatus::Stopped);
         }
         result
     }
@@ -378,6 +387,7 @@ impl ClientHandle {
         if matches!(self.status(), ClientStatus::Stopped) {
             return;
         }
+        self.set_error(None);
         self.set_status(ClientStatus::Stopping);
         if let Some(token) = self
             .inner
@@ -400,7 +410,7 @@ impl ClientHandle {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => tracing::warn!(error = %e, "client task join error"),
                 Err(_) => {
-                    tracing::warn!("client stop timed out after 5s — aborting task");
+                    tracing::warn!("client stop timed out after 5s, aborting task");
                     abort.abort();
                     self.set_status(ClientStatus::Stopped);
                 }

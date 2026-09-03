@@ -55,8 +55,11 @@ pub fn split_server_endpoint(server: &str) -> (String, String) {
 
 pub fn load_config(config_path: &str) -> Result<(ClientConfig, PathBuf)> {
     let path = resolve_path(config_path);
-    let cfg =
+    let mut cfg =
         ClientConfig::load_for_edit(&path).with_context(|| format!("load {}", path.display()))?;
+    if ensure_agent_id(&mut cfg) {
+        save(&path, &cfg)?;
+    }
     Ok((cfg, path))
 }
 
@@ -90,6 +93,7 @@ pub fn load_merge_tunnels(
     };
     cfg.tunnels = tunnels;
     cfg.complete();
+    let _ = ensure_agent_id(&mut cfg);
     Ok((cfg, path))
 }
 
@@ -123,6 +127,7 @@ pub fn load_merge_server_fields(
         ClientConfig {
             server: String::new(),
             user: String::new(),
+            agent_id: String::new(),
             auth: Default::default(),
             transport: TransportConfig::default(),
             tunnels: Vec::new(),
@@ -172,6 +177,7 @@ pub fn load_merge_server_fields(
         ));
     }
 
+    let _ = ensure_agent_id(&mut cfg);
     Ok((cfg, path))
 }
 
@@ -180,6 +186,19 @@ pub fn save(path: &Path, cfg: &ClientConfig) -> Result<()> {
     let body = toml::to_string_pretty(cfg).context("serialize client config")?;
     fs::write(path, body).with_context(|| format!("write {}", path.display()))?;
     Ok(())
+}
+
+pub fn ensure_agent_id(cfg: &mut ClientConfig) -> bool {
+    if !cfg.agent_id.trim().is_empty() {
+        return false;
+    }
+    cfg.agent_id = new_agent_id();
+    true
+}
+
+fn new_agent_id() -> String {
+    let hex = uuid::Uuid::new_v4().simple().to_string();
+    hex[..19].to_owned()
 }
 
 fn ensure_parent(path: &Path) -> Result<()> {
@@ -220,6 +239,7 @@ fn build_base(
     let mut cfg = ClientConfig {
         server,
         user: user.trim().into(),
+        agent_id: new_agent_id(),
         auth: Default::default(),
         transport,
         tunnels,

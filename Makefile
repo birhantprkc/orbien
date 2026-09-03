@@ -59,6 +59,16 @@ desktop-deb: desktop-build
 test:
 	cargo test --workspace
 
+docker-context:
+	chmod +x scripts/prepare-docker-context.sh scripts/stage-docker-slice.sh
+	./scripts/prepare-docker-context.sh --upx
+
+docker-client: docker-context
+	docker build --pull=false -f docker/Dockerfile.client -t orbien:local .
+
+docker-server: docker-context
+	docker build --pull=false -f docker/Dockerfile.server -t orbien-server:local .
+
 fmt:
 	cargo fmt --all
 

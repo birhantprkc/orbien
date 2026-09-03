@@ -38,4 +38,3 @@ password = "123456"
 | `dashboard.port`      | 是  | `0`         | 监听端口；`0` 表示关闭        |
 | `dashboard.user`      | 是  |             | 登录用户名                |
 | `dashboard.password`  | 是  |             | 登录密码                 |
-| `dashboard.staticDir` | 否  |             | 静态资源目录；空则使用内置前端      |

@@ -1,5 +1,6 @@
 pub(crate) mod model;
 mod routes;
+mod snapshot;
 
 use crate::service::Service;
 use anyhow::Result;

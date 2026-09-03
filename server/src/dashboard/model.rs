@@ -76,6 +76,8 @@ pub struct SystemStatus {
 pub struct ClientInfo {
     #[serde(rename = "sessionId")]
     pub session_id: String,
+    #[serde(rename = "agentId")]
+    pub agent_id: String,
     pub user: String,
     pub hostname: String,
     pub os: String,
@@ -90,6 +92,16 @@ pub struct ClientInfo {
     #[serde(rename = "connectedSecs")]
     pub connected_secs: u64,
     pub status: String,
+}
+
+impl ClientInfo {
+    pub fn display_id(&self) -> &str {
+        if self.agent_id.is_empty() {
+            &self.session_id
+        } else {
+            &self.agent_id
+        }
+    }
 }
 
 #[derive(Serialize)]

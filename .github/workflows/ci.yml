@@ -16,18 +16,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: server-ui/package-lock.json
-
       - name: Build server-ui
-        working-directory: server-ui
-        run: |
-          npm ci
-          npm run build
+        uses: ./.github/actions/build-server-ui
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master

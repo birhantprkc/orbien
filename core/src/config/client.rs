@@ -11,6 +11,9 @@ pub struct ClientConfig {
     #[serde(default)]
     pub user: String,
 
+    #[serde(default, rename = "agentId", alias = "agent_id")]
+    pub agent_id: String,
+
     #[serde(default)]
     pub auth: AuthConfig,
 
@@ -561,6 +564,7 @@ impl ClientConfig {
     pub fn connection_settings_eq(&self, other: &Self) -> bool {
         self.server == other.server
             && self.user == other.user
+            && self.agent_id == other.agent_id
             && self.auth == other.auth
             && self.transport == other.transport
             && self.udp_packet_size == other.udp_packet_size

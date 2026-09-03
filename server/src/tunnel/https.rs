@@ -81,15 +81,20 @@ impl HttpsTunnel {
         gw.unregister_tunnel(&name).await;
 
         for domain in &domains {
-            gw.register(
-                domain,
-                HttpsRoute {
-                    tunnel_name: name.clone(),
-                    control: Arc::downgrade(&control),
-                    limiter: limiter.clone(),
-                },
-            )
-            .await?;
+            if let Err(e) = gw
+                .register(
+                    domain,
+                    HttpsRoute {
+                        tunnel_name: name.clone(),
+                        control: Arc::downgrade(&control),
+                        limiter: limiter.clone(),
+                    },
+                )
+                .await
+            {
+                gw.unregister_tunnel(&name).await;
+                return Err(e);
+            }
         }
 
         tracing::info!(

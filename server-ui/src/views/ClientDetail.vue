@@ -195,7 +195,7 @@ onUnmounted(() => {
         {{ t('nav.clients') }}
       </button>
       <span class="crumb-sep" aria-hidden="true">/</span>
-      <span class="crumb-current mono">{{ client?.sessionId || sessionId }}</span>
+      <span class="crumb-current mono">{{ client?.agentId || client?.sessionId || sessionId }}</span>
     </nav>
 
     <div v-if="loading && !client" class="empty-card">{{ t('traffic.loading') }}</div>
@@ -209,11 +209,12 @@ onUnmounted(() => {
             </div>
             <div class="head-body">
               <div class="title-row">
-                <h2 class="name mono">{{ client.sessionId }}</h2>
+                <h2 class="name mono">{{ client.agentId || client.sessionId }}</h2>
                 <span v-if="client.version" class="tag version">v{{ client.version }}</span>
                 <span v-if="client.user" class="tag">{{ client.user }}</span>
               </div>
               <div class="meta">
+                <span v-if="client.agentId" class="mono">session {{ client.sessionId }}</span>
                 <span v-if="client.clientIP" class="mono">{{ client.clientIP }}</span>
                 <OsBadge :os="client.os" :arch="client.arch" size="md" text-only/>
               </div>

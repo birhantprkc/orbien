@@ -137,7 +137,8 @@ async function onKick(sessionId: string, evt: Event) {
 
         <div class="client-body">
           <div class="client-title">
-            <h3 class="client-id">{{ c.sessionId }}</h3>
+            <h3 class="client-id">{{ c.agentId || c.sessionId }}</h3>
+            <span v-if="c.agentId && c.agentId !== c.sessionId" class="tag mono">{{ c.sessionId }}</span>
             <span v-if="c.hostname" class="tag">{{ c.hostname }}</span>
             <span v-if="c.user" class="tag">{{ c.user }}</span>
             <span v-if="c.version" class="tag version">v{{ c.version }}</span>
