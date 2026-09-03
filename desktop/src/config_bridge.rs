@@ -123,6 +123,7 @@ pub fn load_merge_server_fields(
         ClientConfig {
             server: String::new(),
             user: String::new(),
+            agent_id: String::new(),
             auth: Default::default(),
             transport: TransportConfig::default(),
             tunnels: Vec::new(),
@@ -220,6 +221,7 @@ fn build_base(
     let mut cfg = ClientConfig {
         server,
         user: user.trim().into(),
+        agent_id: String::new(),
         auth: Default::default(),
         transport,
         tunnels,

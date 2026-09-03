@@ -1,9 +1,8 @@
-use crate::control::{ActiveSession, Control, SessionEnd};
+use crate::control::{ActiveSession, Control, LoginRejected, SessionEnd};
 use crate::handle::ClientStatus;
 use crate::reload::{
     empty_outcome, outcome_from_plan, outcome_level, plan_reload, ReloadOutcome, ReloadPlan,
 };
-use crate::session_id;
 use anyhow::Result;
 use orbien_core::config::ClientConfig;
 use std::path::{Path, PathBuf};
@@ -29,15 +28,11 @@ struct PendingReloadReply {
 
 pub struct Service {
     cfg: ClientConfig,
-    config_path: PathBuf,
 }
 
 impl Service {
-    pub fn new(cfg: ClientConfig, config_path: impl Into<PathBuf>) -> Self {
-        Self {
-            cfg,
-            config_path: config_path.into(),
-        }
+    pub fn new(cfg: ClientConfig) -> Self {
+        Self { cfg }
     }
 
     pub async fn run(
@@ -55,12 +50,8 @@ impl Service {
             let mut guard = cfg.write().await;
             *guard = self.cfg;
         }
-        let config_path = self.config_path;
 
-        let mut session_id = session_id::load(&config_path);
-        if !session_id.is_empty() {
-            tracing::info!(%session_id, "restored persisted session_id");
-        }
+        let mut session_id = String::new();
 
         let mut first_attempt = true;
         let mut backoff_secs = RECONNECT_BASE_SECS;
@@ -99,7 +90,6 @@ impl Service {
                 res = Control::open_session(
                     Arc::clone(&cfg),
                     session_id.clone(),
-                    &config_path,
                     connect_cancel,
                     || {
                         on_status(ClientStatus::Running);
@@ -120,7 +110,15 @@ impl Service {
                         );
                         return Ok(());
                     }
+                    if let Some(rej) = e.downcast_ref::<LoginRejected>() {
+                        fail_pending_reload(&mut pending_reload_reply, &rej.to_string());
+                        tracing::error!(reason = %rej.reason, "login rejected, stopping");
+                        on_log(format!("ERROR {rej}"));
+                        on_status(ClientStatus::Stopped);
+                        return Err(e);
+                    }
                     on_log(format!("ERROR failed to connect: {e}"));
+                    tracing::warn!(error = %e, "connect failed, retrying");
                     on_status(ClientStatus::Reconnecting);
                     first_attempt = false;
                     let delay = backoff_secs;
@@ -173,7 +171,7 @@ impl Service {
                         tracing::warn!(
                             session_id = %rid,
                             %reason,
-                            "kicked by server — stopping (no reconnect)"
+                            "kicked by server, stopping"
                         );
                         on_log(format!("WARN  kicked by server: {reason}"));
                         return Ok(());

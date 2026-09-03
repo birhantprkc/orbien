@@ -1,46 +1,39 @@
-mod dashboard_view;
+mod agent_registry;
 mod ingress;
 mod session_registry;
+mod session_table;
 
 use crate::access::AccessPolicy;
-use crate::control::Control;
 use crate::metrics::MemMetrics;
-use crate::tunnel::{run_http_gw_listener, run_https_gw_listener, HttpGw, HttpsGw};
+use crate::tunnel::{
+    run_http_gw_listener, run_https_gw_listener, HttpGw, HttpsGw, PortTable, TunnelRegistry,
+};
+use agent_registry::AgentRegistry;
 use anyhow::{anyhow, Result};
 use orbien_core::config::ServerConfig;
 use orbien_core::transport;
+use session_table::SessionMap;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinSet;
 
-#[allow(unused_imports)] // public API re-export
-pub use dashboard_view::DashboardSnapshot;
-
-struct OfflineClientRecord {
-    session_id: String,
-    user: String,
-    hostname: String,
-    os: String,
-    arch: String,
-    client_ip: String,
-    version: String,
-    tunnel_count: usize,
-    disconnected_at: Instant,
-}
-
 pub struct Service {
     cfg: ServerConfig,
     access: Arc<AccessPolicy>,
-    controls: Arc<Mutex<HashMap<String, Arc<Control>>>>,
-    offline_clients: Arc<Mutex<HashMap<String, OfflineClientRecord>>>,
+    pub(crate) controls: Arc<Mutex<SessionMap>>,
+    pub(crate) agents: Arc<AgentRegistry>,
     http_gw: Option<Arc<HttpGw>>,
     https_gw: Option<Arc<HttpsGw>>,
     tls_config: Arc<rustls::ServerConfig>,
-    metrics: Arc<MemMetrics>,
+    pub(crate) metrics: Arc<MemMetrics>,
+    tunnel_registry: Arc<TunnelRegistry>,
+    tcp_ports: Arc<PortTable>,
+    udp_ports: Arc<PortTable>,
+    next_generation: AtomicU64,
 }
 
 impl Service {
@@ -60,17 +53,21 @@ impl Service {
         let tls_config =
             transport::new_server_tls_config(&tls.cert_file, &tls.key_file, &tls.trusted_ca_file)?;
         if tls.force {
-            tracing::info!("transport.tls.force=true — non-TLS control connections rejected");
+            tracing::info!("transport.tls.force=true, rejecting non-TLS control connections");
         }
         Ok(Self {
             cfg,
             access,
             controls: Arc::new(Mutex::new(HashMap::new())),
-            offline_clients: Arc::new(Mutex::new(HashMap::new())),
+            agents: Arc::new(AgentRegistry::new()),
             http_gw,
             https_gw,
             tls_config,
             metrics: MemMetrics::new(),
+            tunnel_registry: Arc::new(TunnelRegistry::new()),
+            tcp_ports: Arc::new(PortTable::new()),
+            udp_ports: Arc::new(PortTable::new()),
+            next_generation: AtomicU64::new(1),
         })
     }
 
@@ -177,34 +174,44 @@ impl Service {
     }
 
     pub async fn kick_client(&self, session_id: &str) -> Result<()> {
-        let control = {
-            let mut map = self.controls.lock().await;
-            map.remove(session_id)
-        };
-        match control {
-            Some(c) => {
-                let tunnel_count = c.tunnel_count().await;
-                {
-                    let mut offline = self.offline_clients.lock().await;
-                    offline.insert(
-                        session_id.to_string(),
-                        OfflineClientRecord {
-                            session_id: session_id.to_string(),
-                            user: c.user.clone(),
-                            hostname: c.hostname.clone(),
-                            os: c.os.clone(),
-                            arch: c.arch.clone(),
-                            client_ip: c.client_ip.clone(),
-                            version: c.version.clone(),
-                            tunnel_count,
-                            disconnected_at: Instant::now(),
-                        },
-                    );
-                }
-                c.kick("kicked from dashboard").await;
-                Ok(())
+        let (gate, control) = {
+            let map = self.controls.lock().await;
+            match map.get(session_id) {
+                Some(entry) => (Arc::clone(&entry.gate), Arc::clone(&entry.control)),
+                None => return Err(anyhow!("client not online: {session_id}")),
             }
-            None => Err(anyhow!("client not online: {session_id}")),
+        };
+
+        let guard = gate.lock_owned().await;
+        {
+            let map = self.controls.lock().await;
+            let still = map
+                .get(session_id)
+                .map(|e| Arc::ptr_eq(&e.control, &control))
+                .unwrap_or(false);
+            if !still {
+                return Err(anyhow!("client not online: {session_id}"));
+            }
         }
+
+        let tunnel_count = control.tunnel_count().await;
+        let generation = control.generation;
+        control.kick("kicked from dashboard").await;
+        control.wait_finished().await;
+
+        {
+            let mut map = self.controls.lock().await;
+            if map
+                .get(session_id)
+                .map(|cur| Arc::ptr_eq(&cur.control, &control))
+                .unwrap_or(false)
+            {
+                map.remove(session_id);
+            }
+        }
+        drop(guard);
+
+        self.agents.release(session_id, generation, tunnel_count);
+        Ok(())
     }
 }

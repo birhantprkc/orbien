@@ -313,7 +313,7 @@ impl ClientHandle {
             Arc::new(move || h.clear_tunnel_remotes())
         };
 
-        let result = Service::new(cfg, config_path.clone())
+        let result = Service::new(cfg)
             .run(
                 cancel.clone(),
                 &mut reload_rx,
@@ -400,7 +400,7 @@ impl ClientHandle {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => tracing::warn!(error = %e, "client task join error"),
                 Err(_) => {
-                    tracing::warn!("client stop timed out after 5s — aborting task");
+                    tracing::warn!("client stop timed out after 5s, aborting task");
                     abort.abort();
                     self.set_status(ClientStatus::Stopped);
                 }

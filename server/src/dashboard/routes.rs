@@ -225,7 +225,7 @@ async fn get_client(
     match snap
         .clients
         .into_iter()
-        .find(|c| c.session_id == session_id)
+        .find(|c| c.session_id == session_id || c.agent_id == session_id)
     {
         Some(c) => Ok(Json(ApiResponse::ok(c))),
         None => Err(StatusCode::NOT_FOUND),

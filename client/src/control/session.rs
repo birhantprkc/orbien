@@ -1,6 +1,5 @@
 use crate::connector::{build_connector, Connector};
 use crate::reload::{ReloadLevel, ReloadOutcome, TunnelChanges};
-use crate::session_id;
 use crate::tunnel::TunnelManager;
 use anyhow::{anyhow, Result};
 use orbien_core::auth;
@@ -9,7 +8,7 @@ use orbien_core::msg::{self, CloseTunnel, Login, Message, NewDataConn, NewTunnel
 use orbien_core::transport::DynStream;
 use orbien_core::VERSION;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -18,6 +17,19 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep};
 use tokio_util::sync::CancellationToken;
+
+#[derive(Debug, Clone)]
+pub struct LoginRejected {
+    pub reason: String,
+}
+
+impl fmt::Display for LoginRejected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "login rejected: {}", self.reason)
+    }
+}
+
+impl std::error::Error for LoginRejected {}
 
 #[derive(Debug)]
 pub enum SessionEnd {
@@ -73,7 +85,6 @@ impl Control {
     pub async fn open_session(
         cfg: Arc<RwLock<ClientConfig>>,
         previous_session_id: String,
-        config_path: &Path,
         parent_cancel: CancellationToken,
         on_connected: impl FnOnce(),
         on_tunnel_remote: OnTunnelRemote,
@@ -98,6 +109,7 @@ impl Control {
             os: std::env::consts::OS.into(),
             arch: std::env::consts::ARCH.into(),
             user: cfg_snapshot.user.clone(),
+            agent_id: cfg_snapshot.agent_id.clone(),
             auth_digest,
             timestamp,
             session_id: previous_session_id,
@@ -108,6 +120,7 @@ impl Control {
             os = %login.os,
             arch = %login.arch,
             user = %login.user,
+            agent_id = %login.agent_id,
             "login identity"
         );
 
@@ -123,13 +136,10 @@ impl Control {
         };
 
         if !resp.error.is_empty() {
-            return Err(anyhow!("login failed: {}", resp.error));
+            return Err(LoginRejected { reason: resp.error }.into());
         }
 
         tracing::info!(session_id = %resp.session_id, "login ok");
-        if let Err(e) = session_id::save(config_path, &resp.session_id) {
-            tracing::warn!(error = %e, "failed to persist session_id");
-        }
 
         let (reader, writer) = tokio::io::split(stream);
         let ctl = Arc::new(Control {
@@ -393,7 +403,7 @@ impl Control {
 
             match msg {
                 Message::KickOut(k) => {
-                    tracing::warn!(reason = %k.reason, "kicked by server — will exit");
+                    tracing::warn!(reason = %k.reason, "kicked by server");
                     return Ok(ReaderEnd::Kicked(k.reason));
                 }
                 Message::ReqDataConn(_) => {

@@ -51,6 +51,9 @@ impl Control {
     }
 
     async fn register_tunnel(self: &Arc<Self>, np: &NewTunnel) -> Result<String> {
+        if self.is_closed() {
+            return Err(anyhow!("control session is closed"));
+        }
         match np.protocol.as_str() {
             "tcp" => self.register_tcp_tunnel(np).await,
             "http" => self.register_http_tunnel(np).await,
@@ -60,43 +63,66 @@ impl Control {
         }
     }
 
+    async fn prepare_name_slot(&self, name: &str) {
+        if let Some(old_ty) = self.detach_tunnel(name).await {
+            self.metrics.close_tunnel(name, old_ty);
+        }
+    }
+
     async fn register_tcp_tunnel(self: &Arc<Self>, np: &NewTunnel) -> Result<String> {
         if np.remote_port <= 0 || np.remote_port > 65535 {
             return Err(anyhow!("invalid remote_port"));
         }
 
         let limiter = Self::tunnel_transport(np)?;
-
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;
         let name = np.tunnel_name.clone();
-        let control = Arc::clone(self);
+        let owner = self.owner();
 
-        {
-            let mut tm = self.tunnels.lock().await;
-            if let Some(old_ty) = tm.remove(&name).await {
-                self.metrics.close_tunnel(&name, old_ty);
-            }
+        self.prepare_name_slot(&name).await;
+        self.tunnel_registry.try_insert(&name, owner.clone())?;
+        if let Err(e) = self.tcp_ports.claim(remote_port, &name) {
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(e);
         }
 
-        let tunnel = TcpTunnel::start(
+        let tunnel = match TcpTunnel::start(
             name.clone(),
             bind_addr,
             remote_port,
-            control,
+            Arc::clone(self),
             limiter,
             Arc::clone(&self.access),
         )
-        .await?;
-        let remote_addr = format!(":{}", remote_port);
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                self.tcp_ports.release(remote_port, &name);
+                self.tunnel_registry.remove_if_owner(&name, &owner);
+                return Err(e);
+            }
+        };
 
+        let remote_addr = format!(":{remote_port}");
         let local_addr = format_local_addr(&np.local_ip, np.local_port);
         let mut tm = self.tunnels.lock().await;
-        let _ = tm
-            .insert(name.clone(), RegisteredTunnel::Tcp(tunnel), local_addr)
-            .await;
+        if let Err(tunnel) = tm.insert(name.clone(), RegisteredTunnel::Tcp(tunnel), local_addr) {
+            drop(tm);
+            tunnel.close().await;
+            self.tcp_ports.release(remote_port, &name);
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(anyhow!("tunnel `{name}` already present in this session"));
+        }
         self.note_tunnel_registered(&name, "tcp");
-        tracing::info!(tunnel = %np.tunnel_name, port = remote_port, "tcp tunnel registered");
+        tracing::info!(
+            tunnel = %np.tunnel_name,
+            port = remote_port,
+            session_id = %self.session_id,
+            generation = self.generation,
+            "tcp tunnel registered"
+        );
         Ok(remote_addr)
     }
 
@@ -107,23 +133,27 @@ impl Control {
             .ok_or_else(|| anyhow!("http tunnel requires server httpGwPort > 0"))?;
 
         let limiter = Self::tunnel_transport(np)?;
-
         let name = np.tunnel_name.clone();
-        {
-            let mut tm = self.tunnels.lock().await;
-            if let Some(old_ty) = tm.remove(&name).await {
-                self.metrics.close_tunnel(&name, old_ty);
-            }
-        }
+        let owner = self.owner();
 
-        let tunnel = HttpTunnel::register(
+        self.prepare_name_slot(&name).await;
+        self.tunnel_registry.try_insert(&name, owner.clone())?;
+
+        let tunnel = match HttpTunnel::register(
             np,
             Arc::clone(self),
             Arc::clone(&gw),
             &self.cfg.root_domain,
             limiter,
         )
-        .await?;
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                self.tunnel_registry.remove_if_owner(&name, &owner);
+                return Err(e);
+            }
+        };
 
         let remote_addr = tunnel
             .domains
@@ -134,9 +164,12 @@ impl Control {
 
         let local_addr = format_local_addr(&np.local_ip, np.local_port);
         let mut tm = self.tunnels.lock().await;
-        let _ = tm
-            .insert(name.clone(), RegisteredTunnel::Http(tunnel), local_addr)
-            .await;
+        if let Err(tunnel) = tm.insert(name.clone(), RegisteredTunnel::Http(tunnel), local_addr) {
+            drop(tm);
+            tunnel.close().await;
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(anyhow!("tunnel `{name}` already present in this session"));
+        }
         self.note_tunnel_registered(&name, "http");
         Ok(remote_addr)
     }
@@ -148,23 +181,27 @@ impl Control {
             .ok_or_else(|| anyhow!("https tunnel requires server httpsGwPort > 0"))?;
 
         let limiter = Self::tunnel_transport(np)?;
-
         let name = np.tunnel_name.clone();
-        {
-            let mut tm = self.tunnels.lock().await;
-            if let Some(old_ty) = tm.remove(&name).await {
-                self.metrics.close_tunnel(&name, old_ty);
-            }
-        }
+        let owner = self.owner();
 
-        let tunnel = HttpsTunnel::register(
+        self.prepare_name_slot(&name).await;
+        self.tunnel_registry.try_insert(&name, owner.clone())?;
+
+        let tunnel = match HttpsTunnel::register(
             np,
             Arc::clone(self),
             Arc::clone(&gw),
             &self.cfg.root_domain,
             limiter,
         )
-        .await?;
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                self.tunnel_registry.remove_if_owner(&name, &owner);
+                return Err(e);
+            }
+        };
 
         let remote_addr = tunnel
             .domains
@@ -175,9 +212,12 @@ impl Control {
 
         let local_addr = format_local_addr(&np.local_ip, np.local_port);
         let mut tm = self.tunnels.lock().await;
-        let _ = tm
-            .insert(name.clone(), RegisteredTunnel::Https(tunnel), local_addr)
-            .await;
+        if let Err(tunnel) = tm.insert(name.clone(), RegisteredTunnel::Https(tunnel), local_addr) {
+            drop(tm);
+            tunnel.close().await;
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(anyhow!("tunnel `{name}` already present in this session"));
+        }
         self.note_tunnel_registered(&name, "https");
         Ok(remote_addr)
     }
@@ -188,44 +228,60 @@ impl Control {
         }
 
         let limiter = Self::tunnel_transport(np)?;
-
         let bind_addr = self.cfg.proxy_addr.clone();
         let remote_port = np.remote_port as u16;
         let name = np.tunnel_name.clone();
-        let control = Arc::clone(self);
+        let owner = self.owner();
         let packet_size = self.cfg.udp_packet_size.max(512);
 
-        {
-            let mut tm = self.tunnels.lock().await;
-            if let Some(old_ty) = tm.remove(&name).await {
-                self.metrics.close_tunnel(&name, old_ty);
-            }
+        self.prepare_name_slot(&name).await;
+        self.tunnel_registry.try_insert(&name, owner.clone())?;
+        if let Err(e) = self.udp_ports.claim(remote_port, &name) {
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(e);
         }
 
-        let tunnel = UdpTunnel::start(
+        let tunnel = match UdpTunnel::start(
             name.clone(),
             bind_addr,
             remote_port,
-            control,
+            Arc::clone(self),
             limiter,
             packet_size,
         )
-        .await?;
-        let remote_addr = format!(":{}", remote_port);
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                self.udp_ports.release(remote_port, &name);
+                self.tunnel_registry.remove_if_owner(&name, &owner);
+                return Err(e);
+            }
+        };
 
+        let remote_addr = format!(":{remote_port}");
         let local_addr = format_local_addr(&np.local_ip, np.local_port);
         let mut tm = self.tunnels.lock().await;
-        let _ = tm
-            .insert(name.clone(), RegisteredTunnel::Udp(tunnel), local_addr)
-            .await;
+        if let Err(tunnel) = tm.insert(name.clone(), RegisteredTunnel::Udp(tunnel), local_addr) {
+            drop(tm);
+            tunnel.close().await;
+            self.udp_ports.release(remote_port, &name);
+            self.tunnel_registry.remove_if_owner(&name, &owner);
+            return Err(anyhow!("tunnel `{name}` already present in this session"));
+        }
         self.note_tunnel_registered(&name, "udp");
-        tracing::info!(tunnel = %np.tunnel_name, port = remote_port, "udp tunnel registered");
+        tracing::info!(
+            tunnel = %np.tunnel_name,
+            port = remote_port,
+            session_id = %self.session_id,
+            generation = self.generation,
+            "udp tunnel registered"
+        );
         Ok(remote_addr)
     }
 
     pub(super) async fn handle_close_tunnel(&self, cp: CloseTunnel) -> Result<()> {
-        let mut tm = self.tunnels.lock().await;
-        if let Some(ty) = tm.remove(&cp.tunnel_name).await {
+        if let Some(ty) = self.detach_tunnel(&cp.tunnel_name).await {
             self.metrics.close_tunnel(&cp.tunnel_name, ty);
         }
         Ok(())

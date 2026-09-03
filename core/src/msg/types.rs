@@ -27,6 +27,8 @@ pub struct Login {
     #[serde(default)]
     pub user: String,
     #[serde(default)]
+    pub agent_id: String,
+    #[serde(default)]
     pub auth_digest: String,
     #[serde(default)]
     pub timestamp: i64,

@@ -5,7 +5,6 @@ pub mod local_control;
 mod plugin;
 mod reload;
 mod service;
-mod session_id;
 mod tunnel;
 
 pub use handle::{ClientHandle, ClientStatus, StartOptions};

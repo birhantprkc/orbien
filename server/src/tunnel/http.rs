@@ -40,19 +40,24 @@ impl HttpTunnel {
 
         for domain in &domains {
             for location in &locations {
-                gw.register(
-                    domain,
-                    HttpRoute {
-                        tunnel_name: name.clone(),
-                        control: Arc::downgrade(&control),
-                        location: location.clone(),
-                        host_header_rewrite: rewrite.clone(),
-                        basic_auth_user: basic_auth_user.clone(),
-                        basic_auth_password: basic_auth_password.clone(),
-                        limiter: limiter.clone(),
-                    },
-                )
-                .await?;
+                if let Err(e) = gw
+                    .register(
+                        domain,
+                        HttpRoute {
+                            tunnel_name: name.clone(),
+                            control: Arc::downgrade(&control),
+                            location: location.clone(),
+                            host_header_rewrite: rewrite.clone(),
+                            basic_auth_user: basic_auth_user.clone(),
+                            basic_auth_password: basic_auth_password.clone(),
+                            limiter: limiter.clone(),
+                        },
+                    )
+                    .await
+                {
+                    gw.unregister_tunnel(&name).await;
+                    return Err(e);
+                }
             }
         }
 
